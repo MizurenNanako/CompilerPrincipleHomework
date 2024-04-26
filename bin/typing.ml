@@ -85,6 +85,7 @@ module AST = struct
     | UnaryOpExpr of unary_operator * expr
     | BinaryOpExpr of binary_operator * expr * expr
       (* No triary expression, it's also IfElseStmt. *)
+    | IfElseExpr of expr * stmt * stmt
     | ObjectExpr of
         expr list (* C allows unnamed object, eq to a corresponding struct. *)
 
@@ -100,6 +101,7 @@ module AST = struct
     | OpPreDec (* -- *)
     | OpPostDec (* -- *)
     | OpCompl (* ~ *)
+    | OpSizeof
 
   and binary_operator =
     | OpAdd (* + *)
@@ -149,6 +151,7 @@ module AST = struct
     | OpPreDec -> p out "PreDec"
     | OpPostDec -> p out "PostDec"
     | OpCompl -> p out "Compl"
+    | OpSizeof -> p out "Sizeof"
 
   let dump_op2 (out : out_channel) (bop : binary_operator) : unit =
     let p = Printf.fprintf in
@@ -186,43 +189,6 @@ module AST = struct
     | OpDot -> p out "Dot"
     | OpTo -> p out "To"
 
-  let rec dump_untyped_expr out utexpr =
-    match utexpr with
-    | UnaryOpExpr (uop, e) ->
-        Printf.fprintf out "%a(%a)" dump_op1 uop dump_expr e
-    | BinaryOpExpr (bop, e1, e2) ->
-        Printf.fprintf out "%a(%a, %a)" dump_op2 bop dump_expr e1 dump_expr e2
-    | ObjectExpr l ->
-        let rec _l o' l' =
-          match l' with
-          | [] -> ()
-          | [ a ] -> Printf.fprintf o' "%a" dump_expr a
-          | hd :: tl ->
-              Printf.fprintf o' "%a, " dump_expr hd;
-              _l o' tl
-        in
-        Printf.fprintf out "Obj(%a)" _l l
-
-  and dump_expr out e =
-    let ue, ct = e in
-    Printf.fprintf out "<%a>%a" CType.dump ct dump_untyped_expr ue
-
-  let dump_identifier out (id : identifier) : unit =
-    let s, ct = id in
-    Printf.fprintf out "<%a>Id(\"%s\")" CType.dump ct s
-
-  let rec dump_identifier_list out idl =
-    match idl with
-    | [] -> ()
-    | [ a ] -> Printf.fprintf out "%a" dump_identifier a
-    | hd :: tl ->
-        Printf.fprintf out "%a, " dump_identifier hd;
-        dump_identifier_list out tl
-
-  let dump_var_decl out (vd : var_decl) : unit =
-    let id, e = vd in
-    Printf.fprintf out "VarDecl(%a <- %a)" dump_identifier id dump_expr e
-
   let rec dump_stmt out (st : stmt) =
     match st with
     | ForStmt a ->
@@ -251,6 +217,46 @@ module AST = struct
     | hd :: tl ->
         Printf.fprintf out "%a, " dump_stmt hd;
         dump_stmt_list out tl
+
+  and dump_untyped_expr out utexpr =
+    match utexpr with
+    | UnaryOpExpr (uop, e) ->
+        Printf.fprintf out "%a(%a)" dump_op1 uop dump_expr e
+    | BinaryOpExpr (bop, e1, e2) ->
+        Printf.fprintf out "%a(%a, %a)" dump_op2 bop dump_expr e1 dump_expr e2
+    | IfElseExpr (e, s, s') ->
+        Printf.fprintf out "Select(Cond(%a), True(%a), False(%a))" dump_expr e
+          dump_stmt s dump_stmt s'
+    | ObjectExpr l ->
+        let rec _l o' l' =
+          match l' with
+          | [] -> ()
+          | [ a ] -> Printf.fprintf o' "%a" dump_expr a
+          | hd :: tl ->
+              Printf.fprintf o' "%a, " dump_expr hd;
+              _l o' tl
+        in
+        Printf.fprintf out "Obj(%a)" _l l
+
+  and dump_expr out e =
+    let ue, ct = e in
+    Printf.fprintf out "<%a>%a" CType.dump ct dump_untyped_expr ue
+
+  and dump_identifier out (id : identifier) : unit =
+    let s, ct = id in
+    Printf.fprintf out "<%a>Id(\"%s\")" CType.dump ct s
+
+  and dump_identifier_list out idl =
+    match idl with
+    | [] -> ()
+    | [ a ] -> Printf.fprintf out "%a" dump_identifier a
+    | hd :: tl ->
+        Printf.fprintf out "%a, " dump_identifier hd;
+        dump_identifier_list out tl
+
+  and dump_var_decl out (vd : var_decl) : unit =
+    let id, e = vd in
+    Printf.fprintf out "VarDecl(%a <- %a)" dump_identifier id dump_expr e
 
   let dump_translation_unit out (tr : translation_unit) : unit =
     match tr with

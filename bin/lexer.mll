@@ -56,7 +56,7 @@ rule read = parse
 | whitespace          { read lexbuf }
 | "\\\n"              { Lexing.new_line lexbuf; SYM_CONCAT }
 | "\\\n" | whitespace { Lexing.new_line lexbuf; read lexbuf }
-| zero                { Zero }
+| zero                { Literal_int 0 }
 | literial_dec        { Literal_int (int_of_dec (Lexing.lexeme lexbuf)) }
 | literial_oct        { Literal_int (int_of_oct (Lexing.lexeme lexbuf)) }
 | literial_hex        { Literal_int (int_of_hex (Lexing.lexeme lexbuf)) }
@@ -97,24 +97,12 @@ rule read = parse
 | "static"            { Kw_static }
 | "struct"            { Kw_struct }
 | "switch"            { Kw_switch }
-| "typedef"           { Kw_typedef }
+(* | "typedef"           { Kw_typedef } *)
 | "union"             { Kw_union }
 | "unsigned"          { Kw_unsigned }
 | "void"              { Kw_void }
 | "volatile"          { Kw_volatile }
 | "while"             { Kw_while }
-| "inline"            { Kw_inline }
-| "restrict"          { Kw_restrict }
-| "_Bool"             { Kw__Bool }
-| "_Complex"          { Kw__Complex }
-| "_Imaginary"        { Kw__Imaginary }
-| "_Alignas"          { Kw__Alignas }
-| "_Alignof"          { Kw__Alignof }
-| "_Atomic"           { Kw__Atomic }
-| "_Generic"          { Kw__Generic }
-| "_Noreturn"         { Kw__Noreturn }
-| "_Static_assert"    { Kw__Static_assert }
-| "_Thread_local"     { Kw__Thread_local }
 | "="                 { Op_eq }
 | "+="                { Op_addeq }
 | "-="                { Op_subeq }
