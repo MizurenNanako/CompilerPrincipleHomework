@@ -90,8 +90,8 @@ module AST = struct
 
   and unary_operator =
     | OpTypeConv of CType.t
-    | OpPositive (* + *)
-    | OpNegative (* - *)
+    | OpPos (* + *)
+    | OpNeg (* - *)
     | OpAmp (* & *)
     | OpStar (* * *)
     | OpNot (* ! *)
@@ -139,16 +139,16 @@ module AST = struct
     let p = Printf.fprintf in
     match uop with
     | OpTypeConv c -> p out "(%a)" CType.dump c
-    | OpPositive -> p out "OpPositive"
-    | OpNegative -> p out "OpNegative"
-    | OpAmp -> p out "OpAmp"
-    | OpStar -> p out "OpStar"
-    | OpNot -> p out "OpNot"
-    | OpPreInc -> p out "OpPreInc"
-    | OpPostInc -> p out "OpPostInc"
-    | OpPreDec -> p out "OpPreDec"
-    | OpPostDec -> p out "OpPostDec"
-    | OpCompl -> p out "OpCompl"
+    | OpPos -> p out "Pos"
+    | OpNeg -> p out "Neg"
+    | OpAmp -> p out "Amp"
+    | OpStar -> p out "Star"
+    | OpNot -> p out "Not"
+    | OpPreInc -> p out "PreInc"
+    | OpPostInc -> p out "PostInc"
+    | OpPreDec -> p out "PreDec"
+    | OpPostDec -> p out "PostDec"
+    | OpCompl -> p out "Compl"
 
   let dump_op2 (out : out_channel) (bop : binary_operator) : unit =
     let p = Printf.fprintf in
