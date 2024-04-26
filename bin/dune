@@ -1,0 +1,10 @@
+(ocamllex lexer)
+
+(menhir
+ (modules parser)
+ (flags --dump)
+ (infer true))
+
+(executable
+ (public_name cph)
+ (name main))
