@@ -11,8 +11,8 @@
 %token <Lexical.floating>                Literal_real
 %token <int64>                           Literal_char
 %token <string>                          Literal_string
-%token <string>                          Linecomment
-%token <string>                          Blockcomment
+// %token <string>                          Linecomment
+// %token <string>                          Blockcomment
 
 // Parenthesis
 %token LPAREN "("
@@ -24,7 +24,7 @@
 
 // Keywords
 // (C98)
-%token Kw_auto "auto"
+// %token Kw_auto "auto"
 %token Kw_break "break"
 %token Kw_case "case"
 %token Kw_char "char"
@@ -35,19 +35,19 @@
 %token Kw_double "double"
 %token Kw_else "else"
 %token Kw_enum "enum"
-%token Kw_extern "extern"
+// %token Kw_extern "extern"
 %token Kw_float "float"
 %token Kw_for "for"
 %token Kw_goto "goto"
 %token Kw_if "if"
 %token Kw_int "int"
 %token Kw_long "long"
-%token Kw_register "register"
+// %token Kw_register "register"
 %token Kw_return "return"
 %token Kw_short "short"
 %token Kw_signed "signed"
 %token Kw_sizeof "sizeof"
-%token Kw_static "static"
+// %token Kw_static "static"
 %token Kw_struct "struct"
 %token Kw_switch "switch"
 // %token Kw_typedef "typedef"
@@ -105,7 +105,7 @@
 %token Op_colon      ":"
 %token Op_semicolon  ";"
 %token Op_ellipsis   "..."
-%token Newline
+// %token Newline
 %token Eof
 
 %start <AST.t>  translation_unit
@@ -118,19 +118,18 @@ external_declaration :
 | f = function_definition { f }
 | d = declaration { d }
 
+(* todo *)
 function_definition :
-| declaration_specifier* declarator declaration* sl = compound_statement 
+| ds = declaration_specifier*; declarator declaration* sl = compound_statement 
 {
+    // let ret_type = CType.deduce_spec ds in
 
 }
 
 declaration_specifier :
 // | storage_class_specifier {}
-| type_specifier {}
-| type_qualifier {}
-{
-
-}
+| a = type_specifier { (false, a) }
+| a = type_qualifier { (a, CType.Undetermined) }
 
 // storage_class_specifier :
 // | "auto" {}
@@ -141,59 +140,71 @@ declaration_specifier :
 
 type_specifier :
 | "void" { CType.CVoid }
-| "char" { CType.CChar }
-| "short" { CType.CShort }
-| "int" { CType.CInt }
-| "long" { CType.CLong }
-| "float" { CType.CFloat }
-| "double" { CType.CDouble }
-| "signed" { CType.CSigned }
-| "unsigned" { CType.CUnsigned }
-| struct_or_union_specifier {}
-| enum_specifier {}
+| "char" { CType.CInt (false, 1) }
+| "short" { CType.CInt (false, 2) }
+| "int" { CType.CInt (false, 4) }
+| "long" { CType.CInt (false, 4) }
+| "float" { CType.CReal 4 }
+| "double" { CType.CReal 8 }
+| "signed" { CType.CInt (false, 4) }
+| "unsigned" { CType.CInt (true, 4) }
+| a = struct_or_union_specifier { a }
+| a = enum_specifier { a }
 // | typedef_name {}
 
+(* todo *)
 struct_or_union_specifier :
-| struct_or_union Identifier "{" struct_declaration+ "}" {}
+| struct_or_union identifier "{" struct_declaration+ "}" {}
 | struct_or_union "{" struct_declaration+ "}" {}
-| struct_or_union Identifier {}
+| struct_or_union identifier {}
 
+identifier :
+| s = Identifier; { (s, (false, Undetermined)) }
+
+(* todo *)
 struct_or_union :
 | "struct" {}
 | "union" {}
 
+(* todo *)
 struct_declaration :
 | specifier_qualifier* struct_declarator_list {}
 
+(* todo *)
 specifier_qualifier :
 | type_specifier {}
 | type_qualifier {}
 
+(* todo *)
 struct_declarator_list :
 | struct_declarator {}
 | struct_declarator_list "," struct_declarator {}
 
+(* todo *)
 struct_declarator :
 | declarator {}
 | declarator ":" constant_expression {}
 | ":" constant_expression {}
 
+(* todo *)
 declarator :
 | pointer? direct_declarator {}
 
+(* todo *)
 pointer :
 | "*" type_qualifier* pointer? {}
 
 type_qualifier :
-| "const" { CType.Const }
-| "volatile" { CType.Default }
+| "const" { true }
+| "volatile" { false }
 
+(* todo *)
 direct_declarator :
-| Identifier {}
+| identifier {}
 | "(" declarator ")" {}
 | direct_declarator "[" constant_expression? "]" {}
 | direct_declarator "(" parameter_type_list ")" {}
-| direct_declarator "(" Identifier* ")" {}
+| direct_declarator "(" identifier* ")" {}
 
 constant_expression :
 | c = conditional_expression { c }
@@ -246,26 +257,31 @@ relational_expression :
 | a = relational_expression; ">="; b = shift_expression
 { (AST.BinaryOpExpr(OpGeq, a, b), CType.CInt) }
 
+(* todo *)
 shift_expression :
 | a = additive_expression { a }
 | shift_expression "<<" additive_expression {}
 | shift_expression ">>" additive_expression {}
 
+(* todo *)
 additive_expression :
 | a = multiplicative_expression { a }
 | additive_expression "+" multiplicative_expression {}
 | additive_expression "-" multiplicative_expression {}
 
+(* todo *)
 multiplicative_expression :
 | a = cast_expression { a }
 | multiplicative_expression "*" cast_expression {}
 | multiplicative_expression "/" cast_expression {}
 | multiplicative_expression "%" cast_expression {}
 
+(* todo *)
 cast_expression :
 | a = unary_expression { a }
 | "(" type_name ")" cast_expression {}
 
+(* todo *)
 unary_expression :
 | a = postfix_expression { a }
 | "++" unary_expression {}
@@ -274,35 +290,41 @@ unary_expression :
 | "sizeof" unary_expression {}
 | "sizeof" type_name {}
 
+(* todo *)
 postfix_expression :
 | a = primary_expression { a }
 | postfix_expression "[" expression "]" {}
 | postfix_expression "(" assignment_expression* ")" {}
-| postfix_expression "." Identifier {}
-| postfix_expression "->" Identifier {}
+| postfix_expression "." identifier {}
+| postfix_expression "->" identifier {}
 | postfix_expression "++" {}
 | postfix_expression "--" {}
 
+(* todo *)
 primary_expression :
-| Identifier {}
+| identifier {}
 | constant {}
 | Literal_string {}
 | "(" expression ")" {}
 
+(* todo *)
 constant :
 | Literal_int {}
 | Literal_char {}
 | Literal_real {}
 // | enumeration_constant {}
 
+(* todo *)
 expression :
 | assignment_expression {}
 | expression "," assignment_expression {}
 
+(* todo *)
 assignment_expression :
 | conditional_expression {}
 | unary_expression assignment_operator assignment_expression {}
 
+(* todo *)
 assignment_operator :
 | "=" {}
 | "*=" {}
@@ -316,6 +338,7 @@ assignment_operator :
 | "^=" {}
 | "|=" {}
 
+(* todo *)
 unary_operator :
 | "&" {}
 | "*" {}
@@ -324,95 +347,116 @@ unary_operator :
 | "~" {}
 | "!" {}
 
+(* todo *)
 type_name :
 | specifier_qualifier+ abstract_declarator? {}
 
+(* todo *)
 parameter_type_list :
-| parameter_list {}
+| a = parameter_list { a }
 | parameter_list "," "..." {}
 
+(* todo *)
 parameter_list :
-| parameter_declaration {}
+| a = parameter_declaration { a }
 | parameter_list "," parameter_declaration {}
 
+(* todo *)
 parameter_declaration :
 | declaration_specifier+ declarator {}
 | declaration_specifier+ abstract_declarator {}
 | declaration_specifier+ {}
 
+(* todo *)
 abstract_declarator :
 | pointer {}
 | pointer direct_abstract_declarator {}
 | direct_abstract_declarator {}
 
+(* todo *)
 direct_abstract_declarator :
 |  "(" abstract_declarator ")" {}
 | direct_abstract_declarator? "[" constant_expression? "]" {}
 | direct_abstract_declarator? "(" parameter_type_list? ")" {}
 
+(* todo *)
 enum_specifier :
-| "enum" Identifier "{" enumerator_list "}" {}
+| "enum" identifier "{" enumerator_list "}" {}
 | "enum" "{" enumerator_list "}" {}
-| "enum" Identifier {}
+| "enum" identifier {}
 
+(* todo *)
 enumerator_list :
 | enumerator {}
 | enumerator_list "," enumerator {}
 
+(* todo *)
 enumerator :
-| Identifier {}
-| Identifier "=" constant_expression {}
+| identifier {}
+| identifier "=" constant_expression {}
 
 // typedef_name :
-// | Identifier {}
+// | identifier {}
 
+(* todo *)
 declaration :
 |  declaration_specifier+ init_declarator* ";" {}
 
+(* todo *)
 init_declarator :
 | declarator {}
 | declarator "=" initzer {}
 
+(* todo *)
 initzer :
 | assignment_expression {}
 | "{" initializer_list "}" {}
 | "{" initializer_list "," "}" {}
 
+(* todo *)
 initializer_list :
 | initzer {}
 | initializer_list "," initzer {}
 
+(* todo *)
 compound_statement :
 | "{" declaration* statement* "}" {}
 
 statement :
-| labeled_statement {}
-| expression_statement {}
-| compound_statement {}
-| selection_statement {}
-| iteration_statement {}
-| jump_statement {}
+| a = labeled_statement { a }
+| a = expression_statement { a }
+| a = compound_statement { a }
+| a = selection_statement { a }
+| a = iteration_statement { a }
+| a = jump_statement { a }
 
+(* todo *)
 labeled_statement :
-| Identifier ":" statement {}
+| identifier ":" statement {}
 | "case" constant_expression ":" statement {}
 | "default" ":" statement {}
 
 expression_statement :
-| expression? ";" {}
+| eo = expression? ";" { AST.ExprStmt eo }
 
 selection_statement :
-| "if" "(" expression ")" statement {}
-| "if" "(" expression ")" statement "else" statement {}
-| "switch" "(" expression ")" statement {}
+| "if"; "("; e = expression; ")"; s = statement { AST.IfStmt (e, s) }
+| "if"; "("; e = expression; ")"; s1 = statement; "else"; s2 = statement 
+{
+    AST.IfElseStmt (e, s1, s2)
+}
+| "switch"; "("; e = expression; ")"; s = statement { AST.SwitchStmt (e, s) }
 
 iteration_statement :
-| "while" "(" expression ")" statement {}
-| "do" statement "while" "(" expression ")" ";" {}
-| "for" "(" expression? ";" expression? ";" expression? ")" statement {}
+| "while"; "("; e = expression; ")"; s = statement { AST.WhileStmt (e, s) }
+| "do"; s = statement; "while"; "("; e = expression; ")"; ";" { AST.DoWhileStmt (e, s) }
+| "for"; "("; eo1 = expression? ";" eo2 = expression? ";" eo3 = expression? ")" s = statement 
+{
+    AST.ForStmt (eo1, eo2, eo3, s)
+}
 
 jump_statement :
-| "goto" Identifier ";" {}
-| "continue" ";" {}
-| "break" ";" {}
-| "return" expression? ";" {}
+| "goto"; i = identifier; ";" { AST.GotoStmt i }
+| "continue" ";" { AST.ContinueStmt }
+| "break" ";" { AST.BreakStmt }
+| "return"; e = expression?; ";" { AST.ReturnStmt e }

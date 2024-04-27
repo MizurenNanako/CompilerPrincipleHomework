@@ -50,8 +50,6 @@ let blockcomment     = "/*"
 rule read = parse
 | linecomment         { singleline_comment lexbuf; read lexbuf }
 | blockcomment        { multiline_comment lexbuf; read lexbuf }
-(* | linecomment          { Linecomment (Lexing.lexeme lexbuf) } *)
-(* | blockcomment         { Blockcomment (Lexing.lexeme lexbuf) } *)
 | newline             { Lexing.new_line lexbuf; emptylines lexbuf }
 | whitespace          { read lexbuf }
 | "\\\n"              { Lexing.new_line lexbuf; SYM_CONCAT }
@@ -71,7 +69,7 @@ rule read = parse
 | "]" | ":>"          { RBRACK }
 | "{" | "<%"          { LBRACE }
 | "}" | "%>"          { RBRACE }
-| "auto"              { Kw_auto }
+(* | "auto"              { Kw_auto } *)
 | "break"             { Kw_break }
 | "case"              { Kw_case }
 | "char"              { Kw_char }
@@ -82,19 +80,19 @@ rule read = parse
 | "double"            { Kw_double }
 | "else"              { Kw_else }
 | "enum"              { Kw_enum }
-| "extern"            { Kw_extern }
+(* | "extern"            { Kw_extern } *)
 | "float"             { Kw_float }
 | "for"               { Kw_for }
 | "goto"              { Kw_goto }
 | "if"                { Kw_if }
 | "int"               { Kw_int }
 | "long"              { Kw_long }
-| "register"          { Kw_register }
+(* | "register"          { Kw_register } *)
 | "return"            { Kw_return }
 | "short"             { Kw_short }
 | "signed"            { Kw_signed }
 | "sizeof"            { Kw_sizeof }
-| "static"            { Kw_static }
+(* | "static"            { Kw_static } *)
 | "struct"            { Kw_struct }
 | "switch"            { Kw_switch }
 (* | "typedef"           { Kw_typedef } *)
@@ -164,8 +162,8 @@ and literial_string buf = parse
 (* Multiply empty lines to one token *)
 and emptylines = parse
 | newline          { Lexing.new_line lexbuf; emptylines lexbuf }
-| linecomment      { singleline_comment lexbuf; emptylines lexbuf }
-| blockcomment     { multiline_comment lexbuf; emptylines lexbuf }
+(* | linecomment      { singleline_comment lexbuf; emptylines lexbuf }
+| blockcomment     { multiline_comment lexbuf; emptylines lexbuf } *)
 | eof | "\000"     { Lexing.new_line lexbuf; Eof }
 | _                {
                         lexbuf_vomit lexbuf;

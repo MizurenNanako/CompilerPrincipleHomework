@@ -2,7 +2,7 @@ module CType = struct
   exception Invalid_CType
 
   type t = ct * et (* Qualifier, type *)
-  and ct = Default | Const
+  and ct = bool (* NonConst (false) | Const (true) *)
 
   and et =
     | Undetermined
@@ -11,29 +11,39 @@ module CType = struct
     | CFunction of t * t list
     | CStruct of t list
     | CUnion of t list
-    | CVoid
-    | CChar of bool (* is_unsigned *)
-    | CShort of bool (* is_unsigned *)
-    | CInt of bool (* is_unsigned *)
-    | CLong of bool (* is_unsigned *)
-    | CFloat
-    | CDouble
-    (* Following types are longer than 1 word *)
-    | CLongLong of bool
+    | CVoid (* for labels, their type is void *)
+    | CInt of bool * int (* is_unsigned, bytes = 1, 2, 4, 8 *)
+    | CReal of int (* bytes = 4, 8, 16 *)
 
-  let combine_spec speclst =
+  let rec deduce_spec (speclst : t list) : t =
     match speclst with
-    | [] -> CInt false
-    | [ CLong u1; CLong u2; CInt u3 ] -> CLongLong (u1 || u2 || u3)
-    | [ CShort u1; CInt u2 ] -> CShort (u1 || u2)
-    | [ CLong u1; CInt u2 ] -> CLong (u1 || u2)
-    | [ CLong u1; CLong u2 ] -> CLongLong (u1 || u2)
+    | [] -> (false, CInt (false, 4))
     | [ a ] -> a
+    | (false, a) :: (true, Undetermined) :: tl
+    | (true, Undetermined) :: (false, a) :: tl ->
+        (* allow to add const for once *)
+        deduce_spec ((true, a) :: tl)
+    | (c', Undetermined) :: (c'', t') :: tl
+    | (c', t') :: (c'', Undetermined) :: tl ->
+        let tl' = (c' || c'', t') :: tl in
+        deduce_spec tl'
+    | (c', CInt (u', 4)) :: (c'', CInt (u'', 4)) :: tl ->
+        (* allow to form long long *)
+        let tl' = (c' || c'', CInt (u' || u'', 8)) :: tl in
+        deduce_spec tl'
+    | (c', CInt (true, _)) :: (c'', CInt (u'', b'')) :: tl ->
+        (* allow to consider unsigned *)
+        let tl' = (c' || c'', CInt (u'', b'')) :: tl in
+        deduce_spec tl'
+    | (c', CInt (u', b')) :: (c'', CInt (u'', _)) :: tl ->
+        (* allo to fold *)
+        let tl' = (c' || c'', CInt (u' || u'', b')) :: tl in
+        deduce_spec tl'
     | _ -> raise Invalid_CType
-    
+
   let rec dump (out : out_channel) (self : t) : unit =
     let _s o' s' =
-      match s' with Default -> () | Const -> Printf.fprintf o' "const "
+      match s' with false -> () | true -> Printf.fprintf o' "const "
     in
     let _u o' u' =
       match u' with true -> Printf.fprintf o' "unsigned " | false -> ()
@@ -41,13 +51,15 @@ module CType = struct
     match self with
     | s, Undetermined -> Printf.fprintf out "%a<error-type>" _s s
     | s, CArray (a, n) -> Printf.fprintf out "%a%a[%i]" _s s dump a n
-    | s, CDouble -> Printf.fprintf out "%adouble" _s s
-    | s, CFloat -> Printf.fprintf out "%afloat" _s s
-    | s, CChar u -> Printf.fprintf out "%a%achar" _s s _u u
-    | s, CShort u -> Printf.fprintf out "%a%ashort" _s s _u u
-    | s, CInt u -> Printf.fprintf out "%a%aint" _s s _u u
-    | s, CLong u -> Printf.fprintf out "%a%along" _s s _u u
-    | s, CLongLong u -> Printf.fprintf out "%a%along long" _s s _u u
+    | s, CReal 8 -> Printf.fprintf out "%adouble" _s s
+    | s, CReal 4 -> Printf.fprintf out "%afloat" _s s
+    | s, CReal n -> Printf.fprintf out "%a__Float_%i_T_" _s s n
+    | s, CInt (u, 1) -> Printf.fprintf out "%a%achar" _s s _u u
+    | s, CInt (u, 2) -> Printf.fprintf out "%a%ashort" _s s _u u
+    | s, CInt (u, 4) -> Printf.fprintf out "%a%aint" _s s _u u
+    (* | s, CInt (u, 4) -> Printf.fprintf out "%a%along" _s s _u u *)
+    | s, CInt (u, 8) -> Printf.fprintf out "%a%along long" _s s _u u
+    | s, CInt (u, n) -> Printf.fprintf out "%a%a__Int_%i_T_" _s s _u u n
     | s, CPointer (_, CFunction (r, l)) ->
         (* Constness on function is meaningless *)
         Printf.fprintf out "%a(*%a)(%a)" dump r _s s _dump_list l
@@ -84,17 +96,21 @@ module AST = struct
   and identifier = string * CType.t
 
   and stmt =
-    | ForStmt of for_stmt
-    | WhileStmt of while_stmt
-    | DoWhileStmt of do_while_stmt
+    | ForStmt of
+        expr option * expr option * expr option * stmt list (* for (a;b;c) d *)
+    | WhileStmt of expr * stmt list (* while (a) b *)
+    | DoWhileStmt of expr * stmt list (* do b while (a) *)
     | VarDeclStmt of var_decl
-    | IfElseStmt of if_else_stmt
-    | EvalStmt of expr
+    | IfStmt of expr * stmt list (* if (a) b *)
+    | IfElseStmt of expr * stmt list * stmt list (* if (a) b else c *)
+    | SwitchStmt of expr * stmt list
+    | LabeledStmt of identifier * stmt list
+    | GotoStmt of identifier
+    | ContinueStmt
+    | BreakStmt
+    | ReturnStmt of expr option
+    | ExprStmt of expr option
 
-  and for_stmt = stmt * expr * stmt * stmt list (* for (a;b;c) d *)
-  and while_stmt = expr * stmt list (* while (a) b *)
-  and do_while_stmt = expr * stmt list (* do b while (a) *)
-  and if_else_stmt = expr * stmt list * stmt list (* if (a) b else c *)
   and expr = untyped_expr * CType.t
 
   and untyped_expr =
@@ -207,23 +223,34 @@ module AST = struct
 
   let rec dump_stmt out (st : stmt) =
     match st with
-    | ForStmt a ->
-        let s, e, s', sl = a in
+    | ForStmt (e, e', e'', sl) ->
         Printf.fprintf out "For(Pre(%a), Cond(%a), Post(%a), Body(%a))"
-          dump_stmt s dump_expr e dump_stmt s' dump_stmt_list sl
-    | WhileStmt a ->
-        let e, sl = a in
+          dump_expr_option e dump_expr_option e' dump_expr_option e''
+          dump_stmt_list sl
+    | WhileStmt (e, sl) ->
         Printf.fprintf out "While(Cond(%a), Body(%a))" dump_expr e
           dump_stmt_list sl
-    | DoWhileStmt a ->
-        let e, sl = a in
+    | DoWhileStmt (e, sl) ->
         Printf.fprintf out "DoWhile(Unless(%a), Body(%a))" dump_expr e
           dump_stmt_list sl
-    | IfElseStmt a ->
-        let e, sl, sl' = a in
+    | IfStmt (e, sl) ->
+        Printf.fprintf out "If(Cond(%a), Body(%a))" dump_expr e dump_stmt_list
+          sl
+    | IfElseStmt (e, sl, sl') ->
         Printf.fprintf out "IfElse(Cond(%a), True(%a), False(%a))" dump_expr e
           dump_stmt_list sl dump_stmt_list sl'
-    | EvalStmt a -> Printf.fprintf out "%a" dump_expr a
+    | SwitchStmt (e, s) ->
+        Printf.fprintf out "Switch(Cond(%a), Body(%a))" dump_expr e
+          dump_stmt_list s
+    | LabeledStmt (i, s) ->
+        Printf.fprintf out "Labeled(Id(%a), Body(%a))" dump_identifier i
+          dump_stmt_list s
+    | GotoStmt i -> Printf.fprintf out "Goto(Id(%a))" dump_identifier i
+    | ContinueStmt -> Printf.fprintf out "Continue"
+    | BreakStmt -> Printf.fprintf out "Continue"
+    | ReturnStmt (Some a) -> Printf.fprintf out "Return(%a)" dump_expr a
+    | ReturnStmt None -> Printf.fprintf out "Return"
+    | ExprStmt a -> Printf.fprintf out "Expr(%a)" dump_expr_option a
     | VarDeclStmt a -> Printf.fprintf out "%a" dump_var_decl a
 
   and dump_stmt_list out sl =
@@ -254,9 +281,12 @@ module AST = struct
         in
         Printf.fprintf out "Obj(%a)" _l l
 
-  and dump_expr out e =
+  and dump_expr out (e : expr) =
     let ue, ct = e in
     Printf.fprintf out "<%a>%a" CType.dump ct dump_untyped_expr ue
+
+  and dump_expr_option out (e : expr option) =
+    match e with Some a -> dump_expr out a | None -> ()
 
   and dump_identifier out (id : identifier) : unit =
     let s, ct = id in
