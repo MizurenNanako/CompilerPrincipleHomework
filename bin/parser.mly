@@ -1,3 +1,7 @@
+%{
+    open Typing
+%}
+
 // Meta
 %token Err
 
@@ -104,7 +108,7 @@
 %token Newline
 %token Eof
 
-%start <Typing.AST.t>  translation_unit
+%start <AST.t>  translation_unit
 %%
 
 translation_unit :
@@ -115,30 +119,36 @@ external_declaration :
 | d = declaration { d }
 
 function_definition :
-| declaration_specifier* declarator declaration* compound_statement {}
+| declaration_specifier* declarator declaration* sl = compound_statement 
+{
+
+}
 
 declaration_specifier :
-| storage_class_specifier {}
+// | storage_class_specifier {}
 | type_specifier {}
 | type_qualifier {}
+{
 
-storage_class_specifier :
-| "auto" {}
-| "register" {}
-| "static" {}
-| "extern" {}
+}
+
+// storage_class_specifier :
+// | "auto" {}
+// | "register" {}
+// | "static" {}
+// | "extern" {}
 // | "typedef" {}
 
 type_specifier :
-| "void" {}
-| "char" {}
-| "short" {}
-| "int" {}
-| "long" {}
-| "float" {}
-| "double" {}
-| "signed" {}
-| "unsigned" {}
+| "void" { CType.CVoid }
+| "char" { CType.CChar }
+| "short" { CType.CShort }
+| "int" { CType.CInt }
+| "long" { CType.CLong }
+| "float" { CType.CFloat }
+| "double" { CType.CDouble }
+| "signed" { CType.CSigned }
+| "unsigned" { CType.CUnsigned }
 | struct_or_union_specifier {}
 | enum_specifier {}
 // | typedef_name {}
@@ -175,8 +185,8 @@ pointer :
 | "*" type_qualifier* pointer? {}
 
 type_qualifier :
-| "const" {}
-| "volatile" {}
+| "const" { CType.Const }
+| "volatile" { CType.Default }
 
 direct_declarator :
 | Identifier {}
@@ -186,66 +196,78 @@ direct_declarator :
 | direct_declarator "(" Identifier* ")" {}
 
 constant_expression :
-| conditional_expression {}
+| c = conditional_expression { c }
 
 conditional_expression :
-| logical_or_expression {}
-| logical_or_expression "?" expression ":" conditional_expression {}
+| a = logical_or_expression { a }
+| a = logical_or_expression; "?"; b = expression; ":"; c = conditional_expression
+{ (AST.IfElseExpr(a, b, c)) }
 
 logical_or_expression :
-| logical_and_expression {}
-| logical_or_expression "||" logical_and_expression {}
+| a = logical_and_expression { a }
+| a = logical_or_expression; "||"; b = logical_and_expression
+{ (AST.BinaryOpExpr(OpOr, a, b), CType.Undetermined) }
 
 logical_and_expression :
-| inclusive_or_expression {}
-| logical_and_expression "&&" inclusive_or_expression {}
+| i = inclusive_or_expression { i }
+| a = logical_and_expression; "&&"; b = inclusive_or_expression
+{ (AST.BinaryOpExpr(OpAnd, a, b), CType.Undetermined) }
 
 inclusive_or_expression :
-| exclusive_or_expression {}
-| inclusive_or_expression "|" exclusive_or_expression {}
+| e = exclusive_or_expression { e }
+| a = inclusive_or_expression; "|"; b = exclusive_or_expression
+{ (AST.BinaryOpExpr(OpBitor, a, b), CType.Undetermined) }
 
 exclusive_or_expression :
-| and_expression {}
-| exclusive_or_expression "^" and_expression {}
+| a = and_expression { a }
+| a = exclusive_or_expression; "^"; b = and_expression
+{ (AST.BinaryOpExpr(OpBitxor, a, b), CType.Undetermined) }
 
 and_expression :
-| equality_expression {}
-| and_expression "&" equality_expression {}
+| e = equality_expression { e }
+| a = and_expression; "&"; b = equality_expression
+{ (AST.BinaryOpExpr(OpBitand, a, b), CType.Undetermined) }
 
 equality_expression :
-| relational_expression {}
-| equality_expression "==" relational_expression {}
-| equality_expression "!=" relational_expression {}
+| r = relational_expression { r }
+| a = equality_expression; "=="; b = relational_expression
+{ (AST.BinaryOpExpr(OpEeq, a, b), CType.CInt) }
+| a = equality_expression; "!="; b = relational_expression
+{ (AST.BinaryOpExpr(OpNeq, a, b), CType.CInt) }
 
 relational_expression :
-| shift_expression {}
-| relational_expression "<" shift_expression {}
-| relational_expression ">" shift_expression {}
-| relational_expression "<=" shift_expression {}
-| relational_expression ">=" shift_expression {}
+| s = shift_expression { s }
+| a = relational_expression; "<"; b = shift_expression
+{ (AST.BinaryOpExpr(OpLt, a, b), CType.CInt) }
+| a = relational_expression; ">"; b = shift_expression
+{ (AST.BinaryOpExpr(OpGt, a, b), CType.CInt) }
+| a = relational_expression; "<="; b = shift_expression
+{ (AST.BinaryOpExpr(OpLeq, a, b), CType.CInt) }
+| a = relational_expression; ">="; b = shift_expression
+{ (AST.BinaryOpExpr(OpGeq, a, b), CType.CInt) }
 
 shift_expression :
-| additive_expression {}
+| a = additive_expression { a }
 | shift_expression "<<" additive_expression {}
 | shift_expression ">>" additive_expression {}
 
 additive_expression :
-| multiplicative_expression {}
+| a = multiplicative_expression { a }
 | additive_expression "+" multiplicative_expression {}
 | additive_expression "-" multiplicative_expression {}
 
 multiplicative_expression :
-| cast_expression {}
+| a = cast_expression { a }
 | multiplicative_expression "*" cast_expression {}
 | multiplicative_expression "/" cast_expression {}
 | multiplicative_expression "%" cast_expression {}
 
 cast_expression :
-| unary_expression {}
+| a = unary_expression { a }
 | "(" type_name ")" cast_expression {}
 
 unary_expression :
-| postfix_expression {}
+| a = postfix_expression { a }
 | "++" unary_expression {}
 | "--" unary_expression {}
 | unary_operator cast_expression {}
@@ -253,7 +275,7 @@ unary_expression :
 | "sizeof" type_name {}
 
 postfix_expression :
-| primary_expression {}
+| a = primary_expression { a }
 | postfix_expression "[" expression "]" {}
 | postfix_expression "(" assignment_expression* ")" {}
 | postfix_expression "." Identifier {}

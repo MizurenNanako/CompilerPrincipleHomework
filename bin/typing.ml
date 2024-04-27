@@ -1,6 +1,8 @@
 module CType = struct
-  type t = st * et (* Const type, type *)
-  and st = Default | Const
+  exception Invalid_CType
+
+  type t = ct * et (* Qualifier, type *)
+  and ct = Default | Const
 
   and et =
     | Undetermined
@@ -10,28 +12,42 @@ module CType = struct
     | CStruct of t list
     | CUnion of t list
     | CVoid
-    | CInt
+    | CChar of bool (* is_unsigned *)
+    | CShort of bool (* is_unsigned *)
+    | CInt of bool (* is_unsigned *)
+    | CLong of bool (* is_unsigned *)
     | CFloat
-    | CLong
-    | CLongLong
     | CDouble
-    | CChar
-    | CShort
+    (* Following types are longer than 1 word *)
+    | CLongLong of bool
 
+  let combine_spec speclst =
+    match speclst with
+    | [] -> CInt false
+    | [ CLong u1; CLong u2; CInt u3 ] -> CLongLong (u1 || u2 || u3)
+    | [ CShort u1; CInt u2 ] -> CShort (u1 || u2)
+    | [ CLong u1; CInt u2 ] -> CLong (u1 || u2)
+    | [ CLong u1; CLong u2 ] -> CLongLong (u1 || u2)
+    | [ a ] -> a
+    | _ -> raise Invalid_CType
+    
   let rec dump (out : out_channel) (self : t) : unit =
     let _s o' s' =
       match s' with Default -> () | Const -> Printf.fprintf o' "const "
     in
+    let _u o' u' =
+      match u' with true -> Printf.fprintf o' "unsigned " | false -> ()
+    in
     match self with
     | s, Undetermined -> Printf.fprintf out "%a<error-type>" _s s
     | s, CArray (a, n) -> Printf.fprintf out "%a%a[%i]" _s s dump a n
-    | s, CChar -> Printf.fprintf out "%achar" _s s
     | s, CDouble -> Printf.fprintf out "%adouble" _s s
     | s, CFloat -> Printf.fprintf out "%afloat" _s s
-    | s, CInt -> Printf.fprintf out "%aint" _s s
-    | s, CLong -> Printf.fprintf out "%along" _s s
-    | s, CLongLong -> Printf.fprintf out "%along long" _s s
-    | s, CShort -> Printf.fprintf out "%ashort" _s s
+    | s, CChar u -> Printf.fprintf out "%a%achar" _s s _u u
+    | s, CShort u -> Printf.fprintf out "%a%ashort" _s s _u u
+    | s, CInt u -> Printf.fprintf out "%a%aint" _s s _u u
+    | s, CLong u -> Printf.fprintf out "%a%along" _s s _u u
+    | s, CLongLong u -> Printf.fprintf out "%a%along long" _s s _u u
     | s, CPointer (_, CFunction (r, l)) ->
         (* Constness on function is meaningless *)
         Printf.fprintf out "%a(*%a)(%a)" dump r _s s _dump_list l
@@ -85,7 +101,7 @@ module AST = struct
     | UnaryOpExpr of unary_operator * expr
     | BinaryOpExpr of binary_operator * expr * expr
       (* No triary expression, it's also IfElseStmt. *)
-    | IfElseExpr of expr * stmt * stmt
+    | IfElseExpr of expr * expr * expr
     | ObjectExpr of
         expr list (* C allows unnamed object, eq to a corresponding struct. *)
 
@@ -226,7 +242,7 @@ module AST = struct
         Printf.fprintf out "%a(%a, %a)" dump_op2 bop dump_expr e1 dump_expr e2
     | IfElseExpr (e, s, s') ->
         Printf.fprintf out "Select(Cond(%a), True(%a), False(%a))" dump_expr e
-          dump_stmt s dump_stmt s'
+          dump_expr s dump_expr s'
     | ObjectExpr l ->
         let rec _l o' l' =
           match l' with
