@@ -7,4 +7,10 @@ if [ -z $1 ]; then
     exit 0;
 fi
 
-dune exec cph $1 | dot -Tpng > $1.png
+dune exec cph $1 > /tmp/a
+if [[ $? -eq 0 ]]; then
+    dot -Tpng /tmp/a > $1.png
+else
+    cat /tmp/a;
+    exit -1;
+fi

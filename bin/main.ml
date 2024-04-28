@@ -44,7 +44,9 @@ let run_parser_graph () =
     let graph = DotGraph.of_program ast in
     Printf.fprintf stdout "%a\n" DotGraph.dump graph
     (* Printf.fprintf stdout "%a\n" AST.dump ast *)
-  with _ -> Printf.fprintf stdout "%s\n" (report lexbuf "SyntaxError")
+  with _ ->
+    Printf.fprintf stdout "%s\n" (report lexbuf "SyntaxError");
+    exit 1
 (* raise e *)
 ;;
 
