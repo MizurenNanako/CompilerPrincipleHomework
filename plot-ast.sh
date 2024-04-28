@@ -11,6 +11,6 @@ dune exec cph $1 > /tmp/a
 if [[ $? -eq 0 ]]; then
     dot -Tpng /tmp/a > $1.png
 else
-    cat /tmp/a;
+    cat /tmp/a >> run.log;
     exit -1;
 fi
