@@ -4,7 +4,7 @@ open Dotutils
 let report (buf : Lexing.lexbuf) (msg : string) =
   Printf.sprintf "File \"%s\":%i:%i %s" buf.lex_curr_p.pos_fname
     buf.lex_curr_p.pos_lnum
-    (buf.lex_curr_p.pos_cnum - buf.lex_curr_p.pos_bol + 1)
+    (buf.lex_curr_p.pos_cnum - buf.lex_curr_p.pos_bol)
     msg
 
 let run_lexer () =
