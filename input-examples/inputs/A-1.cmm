@@ -1,4 +1,0 @@
-int main() {
-  int err[];
-  return 0;
-}
