@@ -1,26 +1,28 @@
 module DotGraph = struct
   type t = { g_label : string; g_arrows : t list }
 
-  let rec dump_elm (uid : int) out (self : t) =
+  let rec dump_elm (uid : int) out (self : t) : int =
     match self with
     | { g_label = s; g_arrows = [] } ->
-        Printf.fprintf out "%i [label=\"%s\"]\n" uid s
+        Printf.fprintf out "%i [label=\"%s\"];\n" uid s;
+        uid + 1
     | { g_label = s; g_arrows = l } ->
-        Printf.fprintf out "%i [label=\"%s\"]\n" uid s;
+        Printf.fprintf out "%i [label=\"%s\"];\n" uid s;
         dump_list uid (uid + 1) out l
 
-  and dump_list (fid : int) (uid : int) out (lst : t list) =
+  and dump_list (fid : int) (uid : int) out (lst : t list) : int =
     match lst with
-    | [] -> ()
+    | [] -> uid + 1
     | a :: tl ->
-        dump_elm uid out a;
-        Printf.fprintf out "%i -> %i\n" fid uid;
-        dump_list fid (uid + 1) out tl
+        let uid' = dump_elm uid out a in
+        Printf.fprintf out "%i -> %i;\n" fid uid;
+        dump_list fid (uid' + 1) out tl
 
   let dump out self =
-    Printf.fprintf out "graph G {\n";
-    dump_elm 1 out self;
-    Printf.fprintf out "}\n"
+    Printf.fprintf out "digraph {\nrankdir=LR;\n";
+    let cnt = dump_elm 1 out self in
+    Printf.fprintf out "}\n";
+    Printf.eprintf "Dumped %i nodes\n" cnt
 
   open Typing
 
@@ -45,15 +47,15 @@ module DotGraph = struct
     | OpEeq -> { g_label = "Eeq"; g_arrows = [] }
     | OpNeq -> { g_label = "Neq"; g_arrows = [] }
 
-  let of_str s = { g_label = s; g_arrows = [] }
+  let of_str s = { g_label = Printf.sprintf "\\\"%s\\\"" s; g_arrows = [] }
 
   let rec of_expr (e : AST.expr) =
     match e with
     | UopExpr (u, e') ->
-        { g_label = "UopExpr"; g_arrows = [ of_uop u; of_expr e' ] }
+        { g_label = "UnaryOpExpr"; g_arrows = [ of_uop u; of_expr e' ] }
     | BopExpr (b, e', e'') ->
         {
-          g_label = "BopExpr";
+          g_label = "BinaryOpExpr";
           g_arrows = [ of_bop b; of_expr e'; of_expr e'' ];
         }
     | CallExpr (e', el) ->
@@ -69,7 +71,7 @@ module DotGraph = struct
         { g_label = "FloatAtom"; g_arrows = [ of_str (string_of_float f) ] }
 
   and of_expr_list el =
-    { g_label = "List"; g_arrows = List.map (fun e -> of_expr e) el }
+    { g_label = "ExprList"; g_arrows = List.map (fun e -> of_expr e) el }
 
   let rec of_stmt (s : AST.stmt) =
     match s with
@@ -91,18 +93,18 @@ module DotGraph = struct
     { g_label = "CompStmt"; g_arrows = [ of_def_list c1; of_stmt_list c2 ] }
 
   and of_stmt_list s =
-    { g_label = "List"; g_arrows = List.map (fun e -> of_stmt e) s }
+    { g_label = "StmtList"; g_arrows = List.map (fun e -> of_stmt e) s }
 
   and of_def d =
     let a, b = d in
     {
       g_label = "Def";
       g_arrows =
-        [ { g_label = "Spec"; g_arrows = [ of_spec a ] }; of_dec_list b ];
+        [ { g_label = "DefSpec"; g_arrows = [ of_spec a ] }; of_dec_list b ];
     }
 
   and of_def_list d =
-    { g_label = "List"; g_arrows = List.map (fun e -> of_def e) d }
+    { g_label = "DefList"; g_arrows = List.map (fun e -> of_def e) d }
 
   and of_spec s =
     match s with
@@ -132,7 +134,7 @@ module DotGraph = struct
     | vd, None -> { g_label = "Dec"; g_arrows = [ of_var_dec vd ] }
 
   and of_dec_list d =
-    { g_label = "List"; g_arrows = List.map (fun e -> of_dec e) d }
+    { g_label = "DecList"; g_arrows = List.map (fun e -> of_dec e) d }
 
   and of_var_dec vd =
     match vd with
@@ -144,7 +146,7 @@ module DotGraph = struct
         }
 
   and of_var_dec_list l =
-    { g_label = "List"; g_arrows = List.map (fun e -> of_var_dec e) l }
+    { g_label = "VarDecList"; g_arrows = List.map (fun e -> of_var_dec e) l }
 
   let of_fun_dec fd =
     let s, l = fd in
@@ -156,7 +158,7 @@ module DotGraph = struct
             g_label = "Pair";
             g_arrows =
               [
-                { g_label = "Spec"; g_arrows = [ of_spec sp ] };
+                { g_label = "FuncDecSpec"; g_arrows = [ of_spec sp ] };
                 { g_label = "VarDec"; g_arrows = [ of_var_dec va ] };
               ];
           })
@@ -164,7 +166,7 @@ module DotGraph = struct
     in
     {
       g_label = "FunDec";
-      g_arrows = [ of_str s; { g_label = "List"; g_arrows = l' } ];
+      g_arrows = [ of_str s; { g_label = "FunDecList"; g_arrows = l' } ];
     }
 
   let of_ext_def (ed : AST.ext_def) =
