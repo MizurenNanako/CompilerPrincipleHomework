@@ -31,7 +31,7 @@ module AST = struct
   and expr =
     | UopExpr of uop * expr
     | BopExpr of bop * expr * expr
-    | CallExpr of string * expr list
+    | CallExpr of expr * expr list
     | AccessExpr of expr * expr
     | MemExpr of expr * string (* expr.id *)
     | IdAtom of string
@@ -85,7 +85,7 @@ module AST = struct
     | FloatAtom a -> p out "Float[%f]" a
     | IntAtom a -> p out "Int[%s]" (Int64.to_string a)
     | IdAtom a -> p out "Id[%s]" a
-    | CallExpr (s, el) -> p out "Call[%s, %a]" s dump_expr_list el
+    | CallExpr (s, el) -> p out "Call[%a, %a]" dump_expr s dump_expr_list el
     | MemExpr (e', s) -> p out "Member[%s, %a]" s dump_expr e'
     | AccessExpr (e', e'') -> p out "Access[%a, %a]" dump_expr e' dump_expr e''
 
@@ -100,12 +100,13 @@ module AST = struct
 
   and dump_fun_dec out (f : fun_dec) =
     let rec _l o l =
+      Printf.fprintf o "ParamList[";
       match l with
-      | [] -> ()
+      | [] -> Printf.fprintf o "]"
       | [ (sp, vd) ] ->
-          Printf.fprintf o "(%a: %a)]" dump_var_dec vd dump_spec sp
+          Printf.fprintf o "Pair[%a, %a]]" dump_spec sp dump_var_dec vd
       | (sp, vd) :: tl ->
-          Printf.fprintf o "(%a: %a), " dump_var_dec vd dump_spec sp;
+          Printf.fprintf o "Pair[%a, %a], " dump_spec sp dump_var_dec vd;
           _l o tl
     in
     let s, b = f in
