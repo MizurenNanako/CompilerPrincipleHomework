@@ -1,325 +1,212 @@
-module CType = struct
-  exception Invalid_CType
-
-  type t = ct * et (* Qualifier, type *)
-  and ct = bool (* NonConst (false) | Const (true) *)
-
-  and et =
-    | Undetermined
-    | CPointer of t
-    | CArray of t * int
-    | CFunction of t * t list
-    | CStruct of t list
-    | CUnion of t list
-    | CVoid (* for labels, their type is void *)
-    | CInt of bool * int (* is_unsigned, bytes = 1, 2, 4, 8 *)
-    | CReal of int (* bytes = 4, 8, 16 *)
-
-  let rec deduce_spec (speclst : t list) : t =
-    match speclst with
-    | [] -> (false, CInt (false, 4))
-    | [ a ] -> a
-    | (false, a) :: (true, Undetermined) :: tl
-    | (true, Undetermined) :: (false, a) :: tl ->
-        (* allow to add const for once *)
-        deduce_spec ((true, a) :: tl)
-    | (c', Undetermined) :: (c'', t') :: tl
-    | (c', t') :: (c'', Undetermined) :: tl ->
-        let tl' = (c' || c'', t') :: tl in
-        deduce_spec tl'
-    | (c', CInt (u', 4)) :: (c'', CInt (u'', 4)) :: tl ->
-        (* allow to form long long *)
-        let tl' = (c' || c'', CInt (u' || u'', 8)) :: tl in
-        deduce_spec tl'
-    | (c', CInt (true, _)) :: (c'', CInt (u'', b'')) :: tl ->
-        (* allow to consider unsigned *)
-        let tl' = (c' || c'', CInt (u'', b'')) :: tl in
-        deduce_spec tl'
-    | (c', CInt (u', b')) :: (c'', CInt (u'', _)) :: tl ->
-        (* allo to fold *)
-        let tl' = (c' || c'', CInt (u' || u'', b')) :: tl in
-        deduce_spec tl'
-    | _ -> raise Invalid_CType
-
-  let rec dump (out : out_channel) (self : t) : unit =
-    let _s o' s' =
-      match s' with false -> () | true -> Printf.fprintf o' "const "
-    in
-    let _u o' u' =
-      match u' with true -> Printf.fprintf o' "unsigned " | false -> ()
-    in
-    match self with
-    | s, Undetermined -> Printf.fprintf out "%a<error-type>" _s s
-    | s, CArray (a, n) -> Printf.fprintf out "%a%a[%i]" _s s dump a n
-    | s, CReal 8 -> Printf.fprintf out "%adouble" _s s
-    | s, CReal 4 -> Printf.fprintf out "%afloat" _s s
-    | s, CReal n -> Printf.fprintf out "%a__Float_%i_T_" _s s n
-    | s, CInt (u, 1) -> Printf.fprintf out "%a%achar" _s s _u u
-    | s, CInt (u, 2) -> Printf.fprintf out "%a%ashort" _s s _u u
-    | s, CInt (u, 4) -> Printf.fprintf out "%a%aint" _s s _u u
-    (* | s, CInt (u, 4) -> Printf.fprintf out "%a%along" _s s _u u *)
-    | s, CInt (u, 8) -> Printf.fprintf out "%a%along long" _s s _u u
-    | s, CInt (u, n) -> Printf.fprintf out "%a%a__Int_%i_T_" _s s _u u n
-    | s, CPointer (_, CFunction (r, l)) ->
-        (* Constness on function is meaningless *)
-        Printf.fprintf out "%a(*%a)(%a)" dump r _s s _dump_list l
-    | s, CPointer p -> Printf.fprintf out "%a *%a" dump p _s s
-    | _, CFunction (r, l) -> Printf.fprintf out "%a(%a)" dump r _dump_list l
-    | s, CStruct l -> Printf.fprintf out "%astruct{%a}" _s s _dump_list l
-    | s, CUnion l -> Printf.fprintf out "%aunion{%a}" _s s _dump_list l
-    | s, CVoid ->
-        (* Constness on void is also meaningless, but we will keep it for deducing. *)
-        Printf.fprintf out "%avoid" _s s
-
-  and _dump_list o' l' =
-    match l' with
-    | [] -> ()
-    | [ a ] -> Printf.fprintf o' "%a" dump a
-    | hd :: tl ->
-        Printf.fprintf o' "%a, " dump hd;
-        _dump_list o' tl
-end
-
 module AST = struct
-  type t = translation_unit
+  type t = program
+  and program = ext_def list
 
-  and translation_unit =
-    | GlobalVarDecl of var_decl
-    | FuncDecl of func_decl
-    | StructDecl of struct_decl
-    | UnionDecl of union_decl
+  and ext_def =
+    | ExtVarDec of spec * var_dec list
+    | ExtFunDec of spec * fun_dec * comp_st
 
-  and var_decl = identifier * expr
-  and func_decl = identifier * identifier list * stmt list
-  and struct_decl = identifier * identifier list
-  and union_decl = identifier * identifier list
-  and identifier = string * CType.t
+  and spec = Spec of ctype | StructSpec of struct_spec
+  and ctype = CInt | CFloat
+
+  and struct_spec =
+    | StructDec of string (*name*)
+    | StructDef of string option * def list (*name, body*)
+
+  and var_dec = VarDecId of string | VarDecArr of var_dec * int64
+  and fun_dec = string * (spec * var_dec) list
+  and def = spec * dec list
+  and dec = var_dec * expr option
 
   and stmt =
-    | ForStmt of
-        expr option * expr option * expr option * stmt list (* for (a;b;c) d *)
-    | WhileStmt of expr * stmt list (* while (a) b *)
-    | DoWhileStmt of expr * stmt list (* do b while (a) *)
-    | VarDeclStmt of var_decl
-    | IfStmt of expr * stmt list (* if (a) b *)
-    | IfElseStmt of expr * stmt list * stmt list (* if (a) b else c *)
-    | SwitchStmt of expr * stmt list
-    | LabeledStmt of identifier * stmt list
-    | GotoStmt of identifier
-    | ContinueStmt
-    | BreakStmt
-    | ReturnStmt of expr option
-    | ExprStmt of expr option
+    | ExprStmt of expr
+    | CompStmt of comp_st
+    | RetStmt of expr
+    | IfStmt of expr * stmt
+    | IfElseStmt of expr * stmt * stmt
+    | WhileStmt of expr * stmt
 
-  and expr = untyped_expr * CType.t
+  and comp_st = def list * stmt list
 
-  and untyped_expr =
-    | UnaryOpExpr of unary_operator * expr
-    | BinaryOpExpr of binary_operator * expr * expr
-      (* No triary expression, it's also IfElseStmt. *)
-    | IfElseExpr of expr * expr * expr
-    | ObjectExpr of
-        expr list (* C allows unnamed object, eq to a corresponding struct. *)
+  and expr =
+    | UopExpr of uop * expr
+    | BopExpr of bop * expr * expr
+    | CallExpr of string * expr list
+    | AccessExpr of expr * expr
+    | MemExpr of expr * string (* expr.id *)
+    | IdAtom of string
+    | IntAtom of int64
+    | FloatAtom of float
 
-  and unary_operator =
-    | OpTypeConv of CType.t
-    | OpPos (* + *)
-    | OpNeg (* - *)
-    | OpAmp (* & *)
-    | OpStar (* * *)
-    | OpNot (* ! *)
-    | OpPreInc (* ++ *)
-    | OpPostInc (* ++ *)
-    | OpPreDec (* -- *)
-    | OpPostDec (* -- *)
-    | OpCompl (* ~ *)
-    | OpSizeof
+  and uop = OpNeg | OpNot
 
-  and binary_operator =
-    | OpAdd (* + *)
-    | OpSub (* - *)
-    | OpMul (* * *)
-    | OpDiv (* / *)
-    | OpMod (* % *)
-    | OpAnd (* && *)
-    | OpOr (* || *)
-    | OpBitand (* & *)
-    | OpBitor (* | *)
-    | OpBitxor (* ^ *)
-    | OpCOMMA (* , *)
-    | OpShl
-    | OpShr
-    | OpEq
-    | OpAddeq
-    | OpSubeq
-    | OpMuleq
-    | OpDiveq
-    | OpModeq
-    | OpShleq
-    | OpShreq
-    | OpBitandeq
-    | OpBitoreq
-    | OpBitxoreq
+  and bop =
+    | OpAssign
+    | OpAnd
+    | OpOr
+    | OpPlus
+    | OpMinus
+    | OpStar
+    | OpDiv
+    | OpGt
+    | OpLt
+    | OpGeq
+    | OpLeq
     | OpEeq
     | OpNeq
-    | OpLt
-    | OpGt
-    | OpLeq
-    | OpGeq
-    | OpDot
-    | OpTo
 
-  let dump_op1 (out : out_channel) (uop : unary_operator) : unit =
+  let dump_uop out u =
+    match u with
+    | OpNeg -> Printf.fprintf out "OpNeg"
+    | OpNot -> Printf.fprintf out "OpNot"
+
+  let dump_bop out b =
+    match b with
+    | OpAssign -> Printf.fprintf out "OpAssign"
+    | OpAnd -> Printf.fprintf out "OpAnd"
+    | OpOr -> Printf.fprintf out "OpOr"
+    | OpPlus -> Printf.fprintf out "OpPlus"
+    | OpMinus -> Printf.fprintf out "OpMinus"
+    | OpStar -> Printf.fprintf out "OpStar"
+    | OpDiv -> Printf.fprintf out "OpDiv"
+    | OpGt -> Printf.fprintf out "OpGt"
+    | OpLt -> Printf.fprintf out "OpLt"
+    | OpGeq -> Printf.fprintf out "OpGeq"
+    | OpLeq -> Printf.fprintf out "OpLeq"
+    | OpEeq -> Printf.fprintf out "OpEeq"
+    | OpNeq -> Printf.fprintf out "OpNeq"
+
+  let rec dump_expr out e =
     let p = Printf.fprintf in
-    match uop with
-    | OpTypeConv c -> p out "(%a)" CType.dump c
-    | OpPos -> p out "Pos"
-    | OpNeg -> p out "Neg"
-    | OpAmp -> p out "Amp"
-    | OpStar -> p out "Star"
-    | OpNot -> p out "Not"
-    | OpPreInc -> p out "PreInc"
-    | OpPostInc -> p out "PostInc"
-    | OpPreDec -> p out "PreDec"
-    | OpPostDec -> p out "PostDec"
-    | OpCompl -> p out "Compl"
-    | OpSizeof -> p out "Sizeof"
+    match e with
+    | UopExpr (u, e') -> p out "%a[%a]" dump_uop u dump_expr e'
+    | BopExpr (u, e', e'') ->
+        p out "%a[%a, %a]" dump_bop u dump_expr e' dump_expr e''
+    | FloatAtom a -> p out "Float[%f]" a
+    | IntAtom a -> p out "Int[%s]" (Int64.to_string a)
+    | IdAtom a -> p out "Id[%s]" a
+    | CallExpr (s, el) -> p out "Call[%s, %a]" s dump_expr_list el
+    | MemExpr (e', s) -> p out "Member[%s, %a]" s dump_expr e'
+    | AccessExpr (e', e'') -> p out "Access[%a, %a]" dump_expr e' dump_expr e''
 
-  let dump_op2 (out : out_channel) (bop : binary_operator) : unit =
+  and dump_expr_list out el =
     let p = Printf.fprintf in
-    match bop with
-    | OpAdd -> p out "Add"
-    | OpSub -> p out "Sub"
-    | OpMul -> p out "Mul"
-    | OpDiv -> p out "Div"
-    | OpMod -> p out "Mod"
-    | OpAnd -> p out "And"
-    | OpOr -> p out "Or"
-    | OpBitand -> p out "Bitand"
-    | OpBitor -> p out "Bitor"
-    | OpBitxor -> p out "Bitxor"
-    | OpCOMMA -> p out "COMMA"
-    | OpShl -> p out "Shl"
-    | OpShr -> p out "Shr"
-    | OpEq -> p out "Eq"
-    | OpAddeq -> p out "Addeq"
-    | OpSubeq -> p out "Subeq"
-    | OpMuleq -> p out "Muleq"
-    | OpDiveq -> p out "Diveq"
-    | OpModeq -> p out "Modeq"
-    | OpShleq -> p out "Shleq"
-    | OpShreq -> p out "Shreq"
-    | OpBitandeq -> p out "Bitandeq"
-    | OpBitoreq -> p out "Bitoreq"
-    | OpBitxoreq -> p out "Bitxoreq"
-    | OpEeq -> p out "Eeq"
-    | OpNeq -> p out "Neq"
-    | OpLt -> p out "Lt"
-    | OpGt -> p out "Gt"
-    | OpLeq -> p out "Leq"
-    | OpGeq -> p out "Geq"
-    | OpDot -> p out "Dot"
-    | OpTo -> p out "To"
+    match el with
+    | [] -> p out "]"
+    | [ a ] -> p out "%a" dump_expr a
+    | hd :: tl ->
+        p out "%a, " dump_expr hd;
+        dump_expr_list out tl
 
-  let rec dump_stmt out (st : stmt) =
+  and dump_fun_dec out (f : fun_dec) =
+    let rec _l o l =
+      match l with
+      | [] -> ()
+      | [ (sp, vd) ] ->
+          Printf.fprintf o "(%a: %a)]" dump_var_dec vd dump_spec sp
+      | (sp, vd) :: tl ->
+          Printf.fprintf o "(%a: %a), " dump_var_dec vd dump_spec sp;
+          _l o tl
+    in
+    let s, b = f in
+    Printf.fprintf out "FunDec[%s, %a]" s _l b
+
+  and dump_stmt out st =
+    let p = Printf.fprintf in
     match st with
-    | ForStmt (e, e', e'', sl) ->
-        Printf.fprintf out "For(Pre(%a), Cond(%a), Post(%a), Body(%a))"
-          dump_expr_option e dump_expr_option e' dump_expr_option e''
-          dump_stmt_list sl
-    | WhileStmt (e, sl) ->
-        Printf.fprintf out "While(Cond(%a), Body(%a))" dump_expr e
-          dump_stmt_list sl
-    | DoWhileStmt (e, sl) ->
-        Printf.fprintf out "DoWhile(Unless(%a), Body(%a))" dump_expr e
-          dump_stmt_list sl
-    | IfStmt (e, sl) ->
-        Printf.fprintf out "If(Cond(%a), Body(%a))" dump_expr e dump_stmt_list
-          sl
-    | IfElseStmt (e, sl, sl') ->
-        Printf.fprintf out "IfElse(Cond(%a), True(%a), False(%a))" dump_expr e
-          dump_stmt_list sl dump_stmt_list sl'
-    | SwitchStmt (e, s) ->
-        Printf.fprintf out "Switch(Cond(%a), Body(%a))" dump_expr e
-          dump_stmt_list s
-    | LabeledStmt (i, s) ->
-        Printf.fprintf out "Labeled(Id(%a), Body(%a))" dump_identifier i
-          dump_stmt_list s
-    | GotoStmt i -> Printf.fprintf out "Goto(Id(%a))" dump_identifier i
-    | ContinueStmt -> Printf.fprintf out "Continue"
-    | BreakStmt -> Printf.fprintf out "Continue"
-    | ReturnStmt (Some a) -> Printf.fprintf out "Return(%a)" dump_expr a
-    | ReturnStmt None -> Printf.fprintf out "Return"
-    | ExprStmt a -> Printf.fprintf out "Expr(%a)" dump_expr_option a
-    | VarDeclStmt a -> Printf.fprintf out "%a" dump_var_decl a
+    | ExprStmt e -> p out "ExprStmt[%a]" dump_expr e
+    | IfStmt (e, s) -> p out "IfStmt[%a, %a]" dump_expr e dump_stmt s
+    | IfElseStmt (e, s, s') ->
+        p out "IfElseStmt[%a, %a, %a]" dump_expr e dump_stmt s dump_stmt s'
+    | RetStmt e -> p out "RetStmt[%a]" dump_expr e
+    | WhileStmt (e, s) -> p out "WhileStmt[%a, %a]" dump_expr e dump_stmt s
+    | CompStmt c -> p out "%a" dump_comp_stmt c
 
-  and dump_stmt_list out sl =
-    match sl with
+  and dump_stmt_list o l =
+    Printf.fprintf o "StmtList[";
+    match l with
     | [] -> ()
-    | [ a ] -> Printf.fprintf out "%a" dump_stmt a
+    | [ a ] -> Printf.fprintf o "%a]" dump_stmt a
     | hd :: tl ->
-        Printf.fprintf out "%a, " dump_stmt hd;
-        dump_stmt_list out tl
+        Printf.fprintf o "%a, " dump_stmt hd;
+        dump_stmt_list o tl
 
-  and dump_untyped_expr out utexpr =
-    match utexpr with
-    | UnaryOpExpr (uop, e) ->
-        Printf.fprintf out "%a(%a)" dump_op1 uop dump_expr e
-    | BinaryOpExpr (bop, e1, e2) ->
-        Printf.fprintf out "%a(%a, %a)" dump_op2 bop dump_expr e1 dump_expr e2
-    | IfElseExpr (e, s, s') ->
-        Printf.fprintf out "Select(Cond(%a), True(%a), False(%a))" dump_expr e
-          dump_expr s dump_expr s'
-    | ObjectExpr l ->
-        let rec _l o' l' =
-          match l' with
-          | [] -> ()
-          | [ a ] -> Printf.fprintf o' "%a" dump_expr a
-          | hd :: tl ->
-              Printf.fprintf o' "%a, " dump_expr hd;
-              _l o' tl
-        in
-        Printf.fprintf out "Obj(%a)" _l l
+  and dump_comp_stmt out c =
+    let dl, sl = c in
+    Printf.fprintf out "%a, %a" dump_def_list dl dump_stmt_list sl
 
-  and dump_expr out (e : expr) =
-    let ue, ct = e in
-    Printf.fprintf out "<%a>%a" CType.dump ct dump_untyped_expr ue
+  and dump_def out d =
+    let sp, dl = d in
+    Printf.fprintf out "Def[%a, %a]" dump_spec sp dump_dec_list dl
 
-  and dump_expr_option out (e : expr option) =
-    match e with Some a -> dump_expr out a | None -> ()
-
-  and dump_identifier out (id : identifier) : unit =
-    let s, ct = id in
-    Printf.fprintf out "<%a>Id(\"%s\")" CType.dump ct s
-
-  and dump_identifier_list out idl =
-    match idl with
+  and dump_def_list o l =
+    Printf.fprintf o "DefList[";
+    match l with
     | [] -> ()
-    | [ a ] -> Printf.fprintf out "%a" dump_identifier a
+    | [ a ] -> Printf.fprintf o "%a]" dump_def a
     | hd :: tl ->
-        Printf.fprintf out "%a, " dump_identifier hd;
-        dump_identifier_list out tl
+        Printf.fprintf o "%a, " dump_def hd;
+        dump_def_list o tl
 
-  and dump_var_decl out (vd : var_decl) : unit =
-    let id, e = vd in
-    Printf.fprintf out "VarDecl(%a <- %a)" dump_identifier id dump_expr e
+  and dump_dec out d =
+    match d with
+    | vd, Some e -> Printf.fprintf out "Dec[%a, %a]" dump_var_dec vd dump_expr e
+    | vd, None -> Printf.fprintf out "Dec[%a]" dump_var_dec vd
 
-  let dump_translation_unit out (tr : translation_unit) : unit =
-    match tr with
-    | GlobalVarDecl a -> Printf.fprintf out "Global(%a)" dump_var_decl a
-    | StructDecl a ->
-        let id, idl = a in
-        Printf.fprintf out "StructDecl(%a <- Struct(%a))" dump_identifier id
-          dump_identifier_list idl
-    | UnionDecl a ->
-        let id, idl = a in
-        Printf.fprintf out "UnionDecl(%a <- Union(%a))" dump_identifier id
-          dump_identifier_list idl
-    | FuncDecl a ->
-        let id, idl, s = a in
-        Printf.fprintf out "FuncDecl(%a <- Func(Param(%a), Body(%a)))"
-          dump_identifier id dump_identifier_list idl dump_stmt_list s
+  and dump_dec_list o l =
+    Printf.fprintf o "DecList[";
+    match l with
+    | [] -> ()
+    | [ a ] -> Printf.fprintf o "%a]" dump_dec a
+    | hd :: tl ->
+        Printf.fprintf o "%a, " dump_dec hd;
+        dump_dec_list o tl
 
-  let dump out self =
-    Printf.fprintf out "TranslationUnit(%a)" dump_translation_unit self
+  and dump_var_dec out v =
+    match v with
+    | VarDecId s -> Printf.fprintf out "VarId[%s]" s
+    | VarDecArr (v', n) ->
+        Printf.fprintf out "VarArr[%s, %a]" (Int64.to_string n) dump_var_dec v'
+
+  and dump_var_dec_list o l =
+    Printf.fprintf o "VarDecList[";
+    match l with
+    | [] -> ()
+    | [ a ] -> Printf.fprintf o "%a]" dump_var_dec a
+    | hd :: tl ->
+        Printf.fprintf o "%a, " dump_var_dec hd;
+        dump_var_dec_list o tl
+
+  and dump_struct_spec out s =
+    match s with
+    | StructDec s -> Printf.fprintf out "StructDec[%s]" s
+    | StructDef (Some s, dl) ->
+        Printf.fprintf out "StructDec[%s, StructDef[%a]]" s dump_def_list dl
+    | StructDef (None, dl) ->
+        Printf.fprintf out "StructDef[%a]" dump_def_list dl
+
+  and dump_spec o s =
+    match s with
+    | Spec CInt -> Printf.fprintf o "Spec[int]"
+    | Spec CFloat -> Printf.fprintf o "Spec[float]"
+    | StructSpec st -> Printf.fprintf o "Spec[%a]" dump_struct_spec st
+
+  and dump_ext_def o e =
+    match e with
+    | ExtVarDec (sp, vdl) ->
+        Printf.fprintf o "ExtVarDec[%a, %a]" dump_spec sp dump_var_dec_list vdl
+    | ExtFunDec (sp, fd, cps) ->
+        Printf.fprintf o "ExtFunDec[%a, %a, %a]" dump_spec sp dump_fun_dec fd
+          dump_comp_stmt cps
+
+  and dump_program o l =
+    Printf.fprintf o "ExtDefList[";
+    match l with
+    | [] -> ()
+    | [ a ] -> Printf.fprintf o "%a]" dump_ext_def a
+    | hd :: tl ->
+        Printf.fprintf o "%a, " dump_ext_def hd;
+        dump_program o tl
+
+  let dump = dump_program
 end
