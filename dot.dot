@@ -1,0 +1,172 @@
+graph G {
+1 [label="Program"]
+2 [label="ExtDefList"]
+3 [label="ExtFunDec"]
+4 [label="Spec"]
+5 [label="Type"]
+6 [label="int"]
+5 -> 6
+4 -> 5
+3 -> 4
+5 [label="FunDec"]
+6 [label="main"]
+5 -> 6
+7 [label="List"]
+5 -> 7
+3 -> 5
+6 [label="CompStmt"]
+7 [label="List"]
+8 [label="Def"]
+9 [label="Spec"]
+10 [label="Spec"]
+11 [label="Type"]
+12 [label="int"]
+11 -> 12
+10 -> 11
+9 -> 10
+8 -> 9
+10 [label="List"]
+11 [label="Dec"]
+12 [label="VarDecId"]
+13 [label="oct1"]
+12 -> 13
+11 -> 12
+13 [label="IntAtom"]
+14 [label="83"]
+13 -> 14
+11 -> 13
+10 -> 11
+8 -> 10
+7 -> 8
+9 [label="Def"]
+10 [label="Spec"]
+11 [label="Spec"]
+12 [label="Type"]
+13 [label="int"]
+12 -> 13
+11 -> 12
+10 -> 11
+9 -> 10
+11 [label="List"]
+12 [label="Dec"]
+13 [label="VarDecId"]
+14 [label="hex1"]
+13 -> 14
+12 -> 13
+14 [label="IntAtom"]
+15 [label="182062866"]
+14 -> 15
+12 -> 14
+11 -> 12
+9 -> 11
+7 -> 9
+10 [label="Def"]
+11 [label="Spec"]
+12 [label="Spec"]
+13 [label="Type"]
+14 [label="int"]
+13 -> 14
+12 -> 13
+11 -> 12
+10 -> 11
+12 [label="List"]
+13 [label="Dec"]
+14 [label="VarDecId"]
+15 [label="hex2"]
+14 -> 15
+13 -> 14
+15 [label="IntAtom"]
+16 [label="3859"]
+15 -> 16
+13 -> 15
+12 -> 13
+10 -> 12
+7 -> 10
+11 [label="Def"]
+12 [label="Spec"]
+13 [label="Spec"]
+14 [label="Type"]
+15 [label="int"]
+14 -> 15
+13 -> 14
+12 -> 13
+11 -> 12
+13 [label="List"]
+14 [label="Dec"]
+15 [label="VarDecId"]
+16 [label="oct2"]
+15 -> 16
+14 -> 15
+16 [label="IntAtom"]
+17 [label="7"]
+16 -> 17
+14 -> 16
+13 -> 14
+11 -> 13
+7 -> 11
+12 [label="Def"]
+13 [label="Spec"]
+14 [label="Spec"]
+15 [label="Type"]
+16 [label="int"]
+15 -> 16
+14 -> 15
+13 -> 14
+12 -> 13
+14 [label="List"]
+15 [label="Dec"]
+16 [label="VarDecId"]
+17 [label="hex4"]
+16 -> 17
+15 -> 16
+17 [label="BopExpr"]
+18 [label="Plus"]
+17 -> 18
+19 [label="IdAtom"]
+20 [label="hex1"]
+19 -> 20
+17 -> 19
+20 [label="IdAtom"]
+21 [label="hex2"]
+20 -> 21
+17 -> 20
+15 -> 17
+14 -> 15
+12 -> 14
+7 -> 12
+6 -> 7
+8 [label="List"]
+9 [label="ExprStmt"]
+10 [label="BopExpr"]
+11 [label="Assign"]
+10 -> 11
+12 [label="IdAtom"]
+13 [label="oct2"]
+12 -> 13
+10 -> 12
+13 [label="UopExpr"]
+14 [label="Not"]
+13 -> 14
+15 [label="UopExpr"]
+16 [label="Neg"]
+15 -> 16
+17 [label="IdAtom"]
+18 [label="oct1"]
+17 -> 18
+15 -> 17
+13 -> 15
+10 -> 13
+9 -> 10
+8 -> 9
+10 [label="RetStmt"]
+11 [label="IntAtom"]
+12 [label="0"]
+11 -> 12
+10 -> 11
+8 -> 10
+6 -> 8
+3 -> 6
+2 -> 3
+1 -> 2
+}
+

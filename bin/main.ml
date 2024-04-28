@@ -1,4 +1,5 @@
 open Typing
+open Dotutils
 
 let report (buf : Lexing.lexbuf) (msg : string) =
   Printf.sprintf "File \"%s\":%i:%i %s" buf.lex_curr_p.pos_fname
@@ -32,8 +33,21 @@ let run_parser () =
     let ast = Parser.program Lexer.read lexbuf in
     Printf.fprintf stdout "%a\n" AST.dump ast
   with _ -> Printf.fprintf stdout "%s\n" (report lexbuf "SyntaxError")
+
+let run_parser_graph () =
+  let fn = Sys.argv.(1) in
+  let infl = In_channel.open_text fn in
+  let lexbuf = Lexing.from_channel infl in
+  Lexing.set_filename lexbuf fn;
+  try
+    let ast = Parser.program Lexer.read lexbuf in
+    let graph = DotGraph.of_program ast in
+    Printf.fprintf stdout "%a\n" DotGraph.dump graph
+    (* Printf.fprintf stdout "%a\n" AST.dump ast *)
+  with _ -> Printf.fprintf stdout "%s\n" (report lexbuf "SyntaxError")
 (* raise e *)
 ;;
 
 ignore run_lexer;
-run_parser ()
+ignore run_parser;
+run_parser_graph ()
