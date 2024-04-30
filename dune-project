@@ -5,7 +5,7 @@
 (name cph)
 
 (source
-  (github MizurenNanako/compiler-principle-homework))
+ (github MizurenNanako/compiler-principle-homework))
 
 (authors "Cherry Sigma")
 
@@ -14,10 +14,8 @@
 (license MIT)
 
 (package
-  (name cph)
-  (synopsis "cph")
-  (description "A much simplified c subset compiler example for homework of course .")
-  (depends ocaml dune)
-
-  )
-
+ (name cph)
+ (synopsis "cph")
+ (description
+  "A much simplified c subset compiler example for homework of course .")
+ (depends ocaml dune menhirLib))
