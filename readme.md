@@ -10,6 +10,10 @@ Can count this as a speedrun, satisfied.
 
 ---
 
+Added options to just dump lexical tokens only, and to dump ast in m-expr, run with `--help` to see these options.
+
+---
+
 This project is done under OCaml, the ultimate answer for compiler principle and any text processing problems, famous for Coq.
 
 you can build the main program with command:
