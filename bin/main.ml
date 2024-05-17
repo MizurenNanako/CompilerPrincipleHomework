@@ -1,94 +1,133 @@
-(* open Typing *)
-open Dotutils
-open UnitActionsParser
-open MenhirLib
+module A = Typing.AST
+module G = Dotutils.DotGraph
+module L = Lexer
+module P = Parser
+module U = UnitActionsParser
+module I = U.MenhirInterpreter
+module LU = MenhirLib.LexerUtil
+module ER = MenhirLib.ErrorReports
 
-let attempt_parse filename =
-  let text, lexbuf = LexerUtil.read filename in
-  match Parser.program Lexer.read lexbuf with
-  | v -> Ok v
-  | exception Lexer.LexicalError msg ->
-      Printf.fprintf stdout "LexicalError: %s\n" msg;
-      Error ""
-  | exception Parser.Error -> Error text
+let run_lexer_only (filename : string) =
+  let ch = In_channel.open_text filename in
+  let lexbuf = Lexing.from_channel ch in
+  let ll () = L.read lexbuf in
+  let rec _loop () =
+    let open Printf in
+    match ll () with
+    | EOF -> printf "done.\n"
+    | k ->
+        printf "%a\n" L.dump_token k;
+        _loop ()
+  in
+  Lexing.set_filename lexbuf filename;
+  try _loop ()
+  with L.LexicalError msg ->
+    flush stdout;
+    Printf.printf "LexicalError: %s\n" msg
 
-let second_wind filename text =
-  let util_env checkpoint =
-    match checkpoint with
-    | MenhirInterpreter.HandlingError env -> env
-    | _ -> assert false
-  in
-  let util_state checkpoint : int =
-    match MenhirInterpreter.top (util_env checkpoint) with
-    | Some (MenhirInterpreter.Element (s, _, _, _)) ->
-        MenhirInterpreter.number s
-    | None -> 0
-  in
-  let show text positions =
-    ErrorReports.extract text positions
-    |> ErrorReports.sanitize |> ErrorReports.compress
-    |> ErrorReports.shorten 20 (* max width 43 *)
-  in
-  let util_get text checkpoint i =
-    match MenhirInterpreter.get i (util_env checkpoint) with
-    | Some (MenhirInterpreter.Element (_, _, pos1, pos2)) ->
-        show text (pos1, pos2)
-    | None -> "???"
-  in
-  let succeed_handler _v = assert false in
-  let fail text buffer (checkpoint : _ MenhirInterpreter.checkpoint) =
-    let location = LexerUtil.range (ErrorReports.last buffer) in
-    let indication =
-      Printf.sprintf "Syntax error %s.\n" (ErrorReports.show (show text) buffer)
-    in
-    let message = Parser_messages.message (util_state checkpoint) in
-    let message = ErrorReports.expand (util_get text checkpoint) message in
-    Printf.fprintf stdout "%s%s%s%!" location indication message;
-    exit 1
-  in
-  let lexbuf = LexerUtil.init filename (Lexing.from_string text) in
-  let supplier = MenhirInterpreter.lexer_lexbuf_to_supplier Lexer.read lexbuf in
-  let buffer, supply_hendler = ErrorReports.wrap_supplier supplier in
-  let checkpoint_hendler =
-    UnitActionsParser.Incremental.program lexbuf.lex_curr_p
-  in
-  MenhirInterpreter.loop_handle succeed_handler (fail text buffer)
-    supply_hendler checkpoint_hendler
+let run_ast_attempt (filename : string) =
+  let text, lexbuf = LU.read filename in
+  try
+    let ast = P.program L.read lexbuf in
+    Ok ast
+  with
+  | L.LexicalError msg ->
+      flush stdout;
+      Printf.printf "LexicalError: %s\n" msg;
+      exit (-1)
+  | P.Error -> Error text
 
-let run_lexer_only filename =
-  let infl = In_channel.open_text filename in
-  let lexbuf = Lexing.from_channel infl in
-  let rec loop () =
-    let tk = Lexer.read lexbuf in
-    match tk with
-    | EOF -> ()
-    | _ as k ->
-        Printf.fprintf stdout "%a\tLine: %i\n" Lexer.dump_token k
-          lexbuf.lex_curr_p.pos_lnum;
-        loop ()
+let run_checker (filename : string) (text : string) =
+  let lexbuf = LU.init filename (Lexing.from_string text) in
+  let error_buffer, supplier =
+    ER.wrap_supplier (I.lexer_lexbuf_to_supplier L.read lexbuf)
   in
-  try loop ()
-  with Lexer.LexicalError msg ->
-    Printf.fprintf stdout "LexicalError: %s\n" msg
 
-let run_parser_mexpr filename =
-  let res = attempt_parse filename in
-  match res with
-  | Ok ast -> Printf.fprintf stdout "%a\n" Typing.AST.dump ast
-  | Error text -> second_wind filename text
+  (* Now set the start state and start to run *)
+  let start_state = U.Incremental.program lexbuf.lex_curr_p in
 
-let run_parser_graph filename =
-  let res = attempt_parse filename in
-  match res with
+  let rec loop (state : unit I.checkpoint) =
+    match state with
+    | InputNeeded _ ->
+        let state' = I.offer state (supplier ()) in
+        loop state'
+    | Accepted _ ->
+        (* We know this won't happen *)
+        assert false
+    | Rejected ->
+        (* We know this will happen *)
+        ()
+    | Shifting (_, _, _) ->
+        let state' = I.resume state in
+        loop state'
+    | AboutToReduce (_, _) ->
+        let state' = I.resume state in
+        loop state'
+    | HandlingError e ->
+        (* We will report the error *)
+        let location = LU.range (ER.last error_buffer) in
+        let error_info posi =
+          ER.extract text posi |> ER.sanitize |> ER.compress
+          |> ER.shorten 20 (* max width 43 *)
+        in
+        let indication = ER.show error_info error_buffer in
+        let util_get i =
+          match I.get i e with
+          | Some (I.Element (_, _, pos1, pos2)) -> error_info (pos1, pos2)
+          | None -> "???"
+        in
+        let message =
+          ER.expand util_get
+            (Parser_messages.message (I.current_state_number e))
+        in
+        Printf.fprintf stdout "%sSyntax error %s.\n%s%!" location indication
+          message;
+
+        (* Try to discard stack elements until at last reduce/shift  *)
+        (* let rec discard_loop (env : unit I.env) =
+             let last_env_opt = I.pop env in
+             match last_env_opt with
+             | None ->
+                 (* already at bottom, so stop *)
+                 env
+             | Some last_env -> (
+                 (* test if this is right *)
+                 match I.env_has_default_reduction last_env with
+                 | true ->
+                     (* fixed *)
+                     last_env
+                 | false ->
+                     (* keep tracing back *)
+                     discard_loop last_env)
+           in
+           (* we shall continue *)
+           let fixed_env = discard_loop e in
+           let fixed_state = I.input_needed fixed_env in *)
+        (* let state' = I.resume fixed_state in *)
+        (* loop fixed_state *)
+        loop (I.resume state)
+  in
+  loop start_state
+
+let run_parser_mexpr (filename : string) =
+  let ans = run_ast_attempt filename in
+  match ans with
+  | Ok ast -> Printf.printf "%a\n" A.dump ast
+  | Error text -> run_checker filename text
+
+let run_parser_graph (filename : string) =
+  let ans = run_ast_attempt filename in
+  match ans with
   | Ok ast ->
-      let graph = DotGraph.of_program ast in
-      Printf.fprintf stdout "%a\n" DotGraph.dump graph
-  | Error text -> second_wind filename text
+      let g = G.of_program ast in
+      Printf.printf "%a\n" G.dump g
+  | Error text -> run_checker filename text
 
 let () =
   let is_lexer_only = ref false in
   let is_parser_mexpr = ref false in
   let is_parser_graph = ref true in
+  let exec_list = ref [] in
   let opts =
     [
       ("--lexer", Arg.Set is_lexer_only, "Set lexer only mode");
@@ -98,10 +137,12 @@ let () =
         "Set parser output mode to dot file, default." );
     ]
   in
-  let anon s =
-    if !is_lexer_only then run_lexer_only s
-    else if !is_parser_mexpr then run_parser_mexpr s
-    else run_parser_graph s
-  in
+  let anon s = exec_list := s :: !exec_list in
   let usage = Printf.sprintf "%s [options] <filename>" Sys.argv.(0) in
-  Arg.parse opts anon usage
+  Arg.parse opts anon usage;
+  let act =
+    if !is_lexer_only then run_lexer_only
+    else if !is_parser_mexpr then run_parser_mexpr
+    else run_parser_graph
+  in
+  List.iter act !exec_list

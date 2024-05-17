@@ -62,90 +62,89 @@
 %%
 
 program:
-| l = ext_def*; EOF { l }
+| ext_def* EOF { $1 }
 
 ext_def:
-| sp = specifier; l = separated_list(COMMA, var_dec); SEMI; { ExtVarDec (sp, l) }
-// | sp = specifier; SEMI { ExtVarDec (sp, []) }
-| sp = specifier; fd = fun_dec; cps = comp_st { ExtFunDec (sp, fd, cps) }
+| specifier separated_list(COMMA, var_dec) SEMI { ExtVarDec ($1, $2) }
+// | sp = specifier SEMI { ExtVarDec (sp, []) }
+| specifier fun_dec comp_st { ExtFunDec ($1, $2, $3) }
 
 specifier:
-| c = ctype { Spec c }
-| s = struct_specifier { StructSpec s }
+| ctype { Spec $1 }
+| struct_specifier { StructSpec $1 }
 
 struct_specifier:
-| STRUCT; t = opt_tag; LC; dl = def*; RC; { StructDef (t, dl) }
-| STRUCT; t = tag { StructDec t }
+| STRUCT opt_tag LC def* RC { StructDef ($2, $4) }
+| STRUCT tag { StructDec $2 }
 
 opt_tag:
-| s = ID { Some s }
-| {  None }
+| ID { Some $1 }
+| { None }
 
 tag:
-| s = ID {  s }
+| ID { $1 }
 
 ctype:
-| KINT     {  CInt }
-| KFLOAT   {  CFloat }
+| KINT     { CInt }
+| KFLOAT   { CFloat }
 
 var_dec:
-| i = ID {  VarDecId i }
-| vd = var_dec; LB; n = INT; RB; {  VarDecArr (vd, n) }
+| ID { VarDecId $1 }
+| var_dec LB INT RB { VarDecArr ($1, $3) }
 
 fun_dec:
-| s = ID; LP; vl = var_list; RP; {  (s, vl) }
-| s = ID; LP; RP; {  (s, []) }
+| ID LP var_list RP { ($1, $3) }
+| ID LP RP { ($1, []) }
 
 var_list:
-| pd = param_dec; COMMA; vl = var_list {  pd :: vl }
-| pd = param_dec; {  [pd] }
+| param_dec COMMA var_list { $1 :: $3 }
+| param_dec { [$1] }
 
 param_dec:
-| sp = specifier; vd = var_dec {  (sp, vd) }
+| specifier var_dec { ($1, $2) }
 
 comp_st:
-| LC; dl = def*; sl = stmt*; RC; {  (dl, sl) }
+| LC def* stmt* RC { ($2, $3) }
 
 stmt:
-| e = exp; SEMI; {  ExprStmt e }
-| c = comp_st {  CompStmt c }
-| RETURN; e = exp; SEMI; {  RetStmt e }
-| IF; LP; e = exp; RP; s = stmt; %prec below_ELSE {  IfStmt (e, s) }
-| IF; LP; e = exp; RP; s1 = stmt; ELSE; s2 = stmt; {  IfElseStmt (e, s1, s2) }
-| WHILE; LP; e = exp; RP; s = stmt; {  WhileStmt (e, s) }
+| exp SEMI { ExprStmt $1 }
+| comp_st { CompStmt $1 }
+| RETURN exp SEMI { RetStmt $2 }
+| IF LP exp RP stmt %prec below_ELSE { IfStmt ($3, $5) }
+| IF LP exp RP stmt ELSE stmt { IfElseStmt ($3, $5, $7) }
+| WHILE LP exp RP stmt { WhileStmt ($3, $5) }
 
 def:
-| sp = specifier; dl = separated_list(COMMA, dec); SEMI; 
-{  (sp, dl) }
+| specifier separated_list(COMMA, dec) SEMI { ($1, $2) }
 
 dec:
-| vd = var_dec; {  (vd, None) }
-| vd = var_dec; ASSIGNOP; e = exp; {  (vd, Some e) }
+| var_dec { ($1, None) }
+| var_dec ASSIGNOP exp { ($1, Some $3) }
 
 exp:
-| e1 = exp; ASSIGNOP; e2 = exp; {  BopExpr (OpAssign, e1, e2) }
-| e1 = exp; AND; e2 = exp; {  BopExpr (OpAnd, e1, e2) }
-| e1 = exp; OR; e2 = exp; {  BopExpr (OpOr, e1, e2) }
-| e1 = exp; GT; e2 = exp; {  BopExpr (OpGt, e1, e2) }
-| e1 = exp; LT; e2 = exp; {  BopExpr (OpLt, e1, e2) }
-| e1 = exp; GEQ; e2 = exp; {  BopExpr (OpGeq, e1, e2) }
-| e1 = exp; LEQ; e2 = exp; {  BopExpr (OpLeq, e1, e2) }
-| e1 = exp; EEQ; e2 = exp; {  BopExpr (OpEeq, e1, e2) }
-| e1 = exp; NEQ; e2 = exp; {  BopExpr (OpNeq, e1, e2) }
-| e1 = exp; PLUS; e2 = exp; {  BopExpr (OpPlus, e1, e2) }
-| e1 = exp; MINUS; e2 = exp; {  BopExpr (OpMinus, e1, e2) }
-| e1 = exp; STAR; e2 = exp; {  BopExpr (OpStar, e1, e2) }
-| e1 = exp; DIV; e2 = exp; {  BopExpr (OpDiv, e1, e2) }
-| LP; e = exp; RP; {  e }
-| MINUS; e = exp; %prec UMINUS {  UopExpr (OpNeg, e) }
-| NOT; e = exp; {UopExpr (OpNot, e) }
-| e = exp; LP; args = separated_list(COMMA, exp); RP; 
+| exp ASSIGNOP exp { BopExpr (OpAssign, $1, $3) }
+| exp AND exp { BopExpr (OpAnd, $1, $3) }
+| exp OR exp { BopExpr (OpOr, $1, $3) }
+| exp GT exp { BopExpr (OpGt, $1, $3) }
+| exp LT exp { BopExpr (OpLt, $1, $3) }
+| exp GEQ exp { BopExpr (OpGeq, $1, $3) }
+| exp LEQ exp { BopExpr (OpLeq, $1, $3) }
+| exp EEQ exp { BopExpr (OpEeq, $1, $3) }
+| exp NEQ exp { BopExpr (OpNeq, $1, $3) }
+| exp PLUS exp { BopExpr (OpPlus, $1, $3) }
+| exp MINUS exp { BopExpr (OpMinus, $1, $3) }
+| exp STAR exp { BopExpr (OpStar, $1, $3) }
+| exp DIV exp { BopExpr (OpDiv, $1, $3) }
+| LP exp RP { $2 }
+| MINUS exp %prec UMINUS { UopExpr (OpNeg, $2) }
+| NOT exp {UopExpr (OpNot, $2) }
+| exp LP separated_list(COMMA, exp) RP 
 {
-    CallExpr (e, args)
+    CallExpr ($1, $3)
 }
-// | s = ID; LP; RP; {  CallExpr (s, []) }
-| e1 = exp; LB; e2 = exp; RB; {  AccessExpr (e1, e2) }
-| e1 = exp; DOT; s = ID; {  MemExpr (e1, s) }
-| s = ID {  IdAtom s }
-| i = INT {  IntAtom i }
-| f = FLOAT {  FloatAtom f }
+| exp LB exp RB { AccessExpr ($1, $3) }
+| exp DOT ID { MemExpr ($1, $3) }
+| ID { IdAtom $1 }
+| INT { IntAtom $1 }
+| FLOAT { FloatAtom $1 }
+| error { IntAtom 0L }

@@ -19,7 +19,7 @@
 
 (menhir
  (modules unitActionsParser)
- (flags --table --external-tokens Parser))
+ (flags --table --external-tokens Parser --strategy legacy))
 
 (rule
  (deps parser_messages.check)
