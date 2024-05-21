@@ -1,49 +1,11 @@
-(ocamllex lexer)
+(ocamllex raw_lexer)
 
 (menhir
  (modules parser)
- (flags --dump)
+ (flags --table --external-tokens Lexical.LexicalToken)
  (infer true))
 
 (executable
  (public_name cph)
  (name main)
- (libraries menhirLib)
- (link_deps parser_messages.check))
-
-(rule
- (action
-  (with-stdout-to
-   unitActionsParser.mly
-   (run menhir %{dep:parser.mly} --only-preprocess-u))))
-
-(menhir
- (modules unitActionsParser)
- (flags --table --external-tokens Parser))
-
-(rule
- (deps parser_messages.check)
- (action
-  (with-stdout-to
-   parser_messages.ml
-   (run
-    menhir
-    %{dep:parser.mly}
-    --compile-errors
-    %{dep:parser_messages.messages}))))
-
-(rule
- (with-stdout-to
-  parser_messages.auto.messages
-  (run menhir %{dep:parser.mly} --list-errors)))
-
-(rule
- (with-stdout-to
-  parser_messages.check
-  (run
-   menhir
-   %{dep:parser.mly}
-   --compare-errors
-   %{dep:parser_messages.auto.messages}
-   --compare-errors
-   %{dep:parser_messages.messages})))
+ (libraries menhirLib))

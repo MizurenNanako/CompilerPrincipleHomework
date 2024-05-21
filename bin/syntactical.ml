@@ -1,4 +1,6 @@
-module AST = struct
+(* lagacy CST *)
+
+module CST = struct
   type t = program
   and program = ext_def list
 
@@ -10,8 +12,8 @@ module AST = struct
   and ctype = CInt | CFloat
 
   and struct_spec =
-    | StructDec of string (*name*)
-    | StructDef of string option * def list (*name, body*)
+    | StructDec of string
+    | StructDef of string option * def list
 
   and var_dec = VarDecId of string | VarDecArr of var_dec * int64
   and fun_dec = string * (spec * var_dec) list
@@ -33,7 +35,7 @@ module AST = struct
     | BopExpr of bop * expr * expr
     | CallExpr of expr * expr list
     | AccessExpr of expr * expr
-    | MemExpr of expr * string (* expr.id *)
+    | MemExpr of expr * string
     | IdAtom of string
     | IntAtom of int64
     | FloatAtom of float
@@ -85,9 +87,11 @@ module AST = struct
     | FloatAtom a -> p out "Float[%f]" a
     | IntAtom a -> p out "Int[%s]" (Int64.to_string a)
     | IdAtom a -> p out "Id[%s]" a
-    | CallExpr (s, el) -> p out "Call[%a, %a]" dump_expr s dump_expr_list el
+    | CallExpr (s, el) ->
+        p out "Call[%a, %a]" dump_expr s dump_expr_list el
     | MemExpr (e', s) -> p out "Member[%s, %a]" s dump_expr e'
-    | AccessExpr (e', e'') -> p out "Access[%a, %a]" dump_expr e' dump_expr e''
+    | AccessExpr (e', e'') ->
+        p out "Access[%a, %a]" dump_expr e' dump_expr e''
 
   and dump_expr_list out el =
     let p = Printf.fprintf in
@@ -104,9 +108,11 @@ module AST = struct
       match l with
       | [] -> Printf.fprintf o "]"
       | [ (sp, vd) ] ->
-          Printf.fprintf o "Pair[%a, %a]]" dump_spec sp dump_var_dec vd
+          Printf.fprintf o "Pair[%a, %a]]" dump_spec sp dump_var_dec
+            vd
       | (sp, vd) :: tl ->
-          Printf.fprintf o "Pair[%a, %a], " dump_spec sp dump_var_dec vd;
+          Printf.fprintf o "Pair[%a, %a], " dump_spec sp dump_var_dec
+            vd;
           _l o tl
     in
     let s, b = f in
@@ -118,9 +124,11 @@ module AST = struct
     | ExprStmt e -> p out "ExprStmt[%a]" dump_expr e
     | IfStmt (e, s) -> p out "IfStmt[%a, %a]" dump_expr e dump_stmt s
     | IfElseStmt (e, s, s') ->
-        p out "IfElseStmt[%a, %a, %a]" dump_expr e dump_stmt s dump_stmt s'
+        p out "IfElseStmt[%a, %a, %a]" dump_expr e dump_stmt s
+          dump_stmt s'
     | RetStmt e -> p out "RetStmt[%a]" dump_expr e
-    | WhileStmt (e, s) -> p out "WhileStmt[%a, %a]" dump_expr e dump_stmt s
+    | WhileStmt (e, s) ->
+        p out "WhileStmt[%a, %a]" dump_expr e dump_stmt s
     | CompStmt c -> p out "%a" dump_comp_stmt c
 
   and dump_stmt_list o l =
@@ -151,7 +159,8 @@ module AST = struct
 
   and dump_dec out d =
     match d with
-    | vd, Some e -> Printf.fprintf out "Dec[%a, %a]" dump_var_dec vd dump_expr e
+    | vd, Some e ->
+        Printf.fprintf out "Dec[%a, %a]" dump_var_dec vd dump_expr e
     | vd, None -> Printf.fprintf out "Dec[%a]" dump_var_dec vd
 
   and dump_dec_list o l =
@@ -167,7 +176,8 @@ module AST = struct
     match v with
     | VarDecId s -> Printf.fprintf out "VarId[%s]" s
     | VarDecArr (v', n) ->
-        Printf.fprintf out "VarArr[%s, %a]" (Int64.to_string n) dump_var_dec v'
+        Printf.fprintf out "VarArr[%s, %a]" (Int64.to_string n)
+          dump_var_dec v'
 
   and dump_var_dec_list o l =
     Printf.fprintf o "VarDecList[";
@@ -182,7 +192,8 @@ module AST = struct
     match s with
     | StructDec s -> Printf.fprintf out "StructDec[%s]" s
     | StructDef (Some s, dl) ->
-        Printf.fprintf out "StructDec[%s, StructDef[%a]]" s dump_def_list dl
+        Printf.fprintf out "StructDec[%s, StructDef[%a]]" s
+          dump_def_list dl
     | StructDef (None, dl) ->
         Printf.fprintf out "StructDef[%a]" dump_def_list dl
 
@@ -195,10 +206,11 @@ module AST = struct
   and dump_ext_def o e =
     match e with
     | ExtVarDec (sp, vdl) ->
-        Printf.fprintf o "ExtVarDec[%a, %a]" dump_spec sp dump_var_dec_list vdl
+        Printf.fprintf o "ExtVarDec[%a, %a]" dump_spec sp
+          dump_var_dec_list vdl
     | ExtFunDec (sp, fd, cps) ->
-        Printf.fprintf o "ExtFunDec[%a, %a, %a]" dump_spec sp dump_fun_dec fd
-          dump_comp_stmt cps
+        Printf.fprintf o "ExtFunDec[%a, %a, %a]" dump_spec sp
+          dump_fun_dec fd dump_comp_stmt cps
 
   and dump_program o l =
     Printf.fprintf o "ExtDefList[";
