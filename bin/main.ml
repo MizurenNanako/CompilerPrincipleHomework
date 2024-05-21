@@ -74,14 +74,14 @@ let run_lexer_only filename =
 let run_parser_mexpr filename =
   let res = attempt_parse filename in
   match res with
-  | Ok ast -> Printf.fprintf stdout "%a\n" Typing.AST.dump ast
+  | Ok ast -> Printf.fprintf stdout "%a\n" Syntatical_util.Repr.dump ast
   | Error text -> second_wind filename text
 
 let run_parser_graph filename =
   let res = attempt_parse filename in
   match res with
   | Ok ast ->
-      let graph = DotGraph.of_program ast in
+      let graph = Syntatical_util.ToGraph.of_program ast in
       Printf.fprintf stdout "%a\n" DotGraph.dump graph
   | Error text -> second_wind filename text
 

@@ -1,5 +1,5 @@
 %{
-    open Typing.AST
+    open Syntatical.AST
 %}
 
 %token <int64> INT
