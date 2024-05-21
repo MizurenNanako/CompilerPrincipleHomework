@@ -1,6 +1,7 @@
 {
   open Parser
   open Lexical
+  open Lexical.Literal
   exception LexicalError of string
 
   (* Unlex lasr charator *)
@@ -20,9 +21,9 @@
   
   let dump_token out tk =
     match tk with
-    | Parser.INT i64 -> Printf.fprintf out "ICONST(%s)" (Int64.to_string i64)
-    | FLOAT f -> Printf.fprintf out "FCONST(%f)" f
-    | ID s -> Printf.fprintf out "ID(%s)" s
+    | Parser.INT (i64,_) -> Printf.fprintf out "ICONST(%s)" (Int64.to_string i64)
+    | FLOAT (f,_) -> Printf.fprintf out "FCONST(%f)" f
+    | ID (s,_) -> Printf.fprintf out "ID(%s)" s
     | SEMI -> Printf.fprintf out "SEMI"
     | COMMA -> Printf.fprintf out "COMMA"
     | ASSIGNOP -> Printf.fprintf out "ASSIGNOP"
@@ -79,12 +80,12 @@ rule read = parse
 | "\n" { Lexing.new_line lexbuf; read lexbuf }
 | "//" [^ '\n']* { read lexbuf }
 | "/*" { skip_comment lexbuf }
-| (literial_real as s) { FLOAT (float_of_string s) }
-| (literial_dec as s) { INT ((int_of_dec s).data) }
-| (literial_oct as s) { INT ((int_of_oct s).data) }
-| (literial_hex as s) { INT ((int_of_hex s).data) }
-| (literial_bin as s) { INT ((int_of_bin s).data) }
-| zero { INT 0L }
+| (literial_real as s) { FLOAT (float_of_string s, Range.of_lexbuf lexbuf) }
+| (literial_dec as s) { INT ((int_of_dec s).data, Range.of_lexbuf lexbuf) }
+| (literial_oct as s) { INT ((int_of_oct s).data, Range.of_lexbuf lexbuf) }
+| (literial_hex as s) { INT ((int_of_hex s).data, Range.of_lexbuf lexbuf) }
+| (literial_bin as s) { INT ((int_of_bin s).data, Range.of_lexbuf lexbuf) }
+| zero { INT (0L, Range.of_lexbuf lexbuf) }
 | ";" { SEMI }
 | "," { COMMA }
 | "=" { ASSIGNOP }
@@ -115,7 +116,7 @@ rule read = parse
 | "if" { IF }
 | "else" { ELSE }
 | "while" { WHILE }
-| (identifier as s) { ID s }
+| (identifier as s) { ID (s, Range.of_lexbuf lexbuf) }
 | eof { EOF }
 | _ as k { report lexbuf (Printf.sprintf "Unexpected: %c" k) }
 

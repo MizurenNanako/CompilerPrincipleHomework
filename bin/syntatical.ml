@@ -33,10 +33,10 @@ module AST = struct
     | BopExpr of bop * expr * expr
     | CallExpr of expr * expr list
     | AccessExpr of expr * expr
-    | MemExpr of expr * string (* expr.id *)
-    | IdAtom of string
-    | IntAtom of int64
-    | FloatAtom of float
+    | MemExpr of expr * string (* expr.id *) * Lexical.Range.t
+    | IdAtom of string * Lexical.Range.t
+    | IntAtom of int64 * Lexical.Range.t
+    | FloatAtom of float * Lexical.Range.t
 
   and uop = OpNeg | OpNot
 

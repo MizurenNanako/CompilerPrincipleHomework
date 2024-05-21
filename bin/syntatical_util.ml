@@ -28,11 +28,11 @@ module Repr = struct
     | UopExpr (u, e') -> p out "%a[%a]" dump_uop u dump_expr e'
     | BopExpr (u, e', e'') ->
         p out "%a[%a, %a]" dump_bop u dump_expr e' dump_expr e''
-    | FloatAtom a -> p out "Float[%f]" a
-    | IntAtom a -> p out "Int[%s]" (Int64.to_string a)
-    | IdAtom a -> p out "Id[%s]" a
+    | FloatAtom (a, _) -> p out "Float[%f]" a
+    | IntAtom (a, _) -> p out "Int[%s]" (Int64.to_string a)
+    | IdAtom (a, _) -> p out "Id[%s]" a
     | CallExpr (s, el) -> p out "Call[%a, %a]" dump_expr s dump_expr_list el
-    | MemExpr (e', s) -> p out "Member[%s, %a]" s dump_expr e'
+    | MemExpr (e', s, _) -> p out "Member[%s, %a]" s dump_expr e'
     | AccessExpr (e', e'') -> p out "Access[%a, %a]" dump_expr e' dump_expr e''
 
   and dump_expr_list out el =
@@ -198,12 +198,12 @@ module ToGraph = struct
         { g_label = "CallExpr"; g_arrows = [ of_expr e'; of_expr_list el ] }
     | AccessExpr (e', e'') ->
         { g_label = "AccessExpr"; g_arrows = [ of_expr e'; of_expr e'' ] }
-    | MemExpr (e', s) ->
+    | MemExpr (e', s, _) ->
         { g_label = "MemExpr"; g_arrows = [ of_expr e'; of_str s ] }
-    | IdAtom s -> { g_label = "IdAtom"; g_arrows = [ of_str s ] }
-    | IntAtom i ->
+    | IdAtom (s, _) -> { g_label = "IdAtom"; g_arrows = [ of_str s ] }
+    | IntAtom (i, _) ->
         { g_label = "IntAtom"; g_arrows = [ of_str (Int64.to_string i) ] }
-    | FloatAtom f ->
+    | FloatAtom (f, _) ->
         { g_label = "FloatAtom"; g_arrows = [ of_str (string_of_float f) ] }
 
   and of_expr_list el =
