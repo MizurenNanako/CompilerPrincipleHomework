@@ -71,7 +71,7 @@ let run_lexer_only filename =
   with Lexer.LexicalError msg ->
     Printf.fprintf stdout "LexicalError: %s\n" msg
 
-let run_parser_mexpr filename =
+let run_parser_sexpr filename =
   let res = attempt_parse filename in
   match res with
   | Ok ast -> Printf.fprintf stdout "%a\n" Syntatical_util.Repr.dump ast
@@ -87,12 +87,12 @@ let run_parser_graph filename =
 
 let () =
   let is_lexer_only = ref false in
-  let is_parser_mexpr = ref false in
+  let is_parser_sexpr = ref false in
   let is_parser_graph = ref true in
   let opts =
     [
       ("--lexer", Arg.Set is_lexer_only, "Set lexer only mode");
-      ("--mexpr", Arg.Set is_parser_mexpr, "Set parser output mode to mexpr");
+      ("--sexpr", Arg.Set is_parser_sexpr, "Set parser output mode to sexpr");
       ( "--graph",
         Arg.Set is_parser_graph,
         "Set parser output mode to dot file, default." );
@@ -100,7 +100,7 @@ let () =
   in
   let anon s =
     if !is_lexer_only then run_lexer_only s
-    else if !is_parser_mexpr then run_parser_mexpr s
+    else if !is_parser_sexpr then run_parser_sexpr s
     else run_parser_graph s
   in
   let usage = Printf.sprintf "%s [options] <filename>" Sys.argv.(0) in
